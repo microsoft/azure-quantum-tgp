@@ -1,0 +1,119 @@
+B:
+  - AMI3D_field
+  - Br
+  - ami_3d_field
+  - magnet_z_field
+  - B_field
+  - Bx
+V_leftcutter:
+  - "*_V_sidecutter_left_gate"
+  - "*_V_top_left_gate"
+  - LT
+  - sidecutter_left_voltage
+  - top_and_plunger_gate_left
+  - LC_Vdc
+  - LC
+  - V_side_cutter_L
+V_rightcutter:
+  - "*_V_sidecutter_right_gate"
+  - "*_V_top_right_gate"
+  - RT
+  - sidecutter_right_voltage
+  - top_and_plunger_gate_right
+  - RC_Vdc
+  - RC
+  - V_side_cutter_R
+V:
+  - "*V_midplunger_gate"
+  - voltage
+  - midplunger_voltage
+  - middle_plunger
+  - P_Vdc
+  - dev_P_comp_P_comp
+  - middle_plunger_compensated
+  - P
+  - V_mid_plunger
+  - V_plunger
+  - p
+I_1w_L:
+  - "*_raster_g_ll_1w_xiy"
+  - "*_raster_left_local_1_xiy"
+  - g_ll_1w
+  - g_11
+  - g_33
+I_1w_R:
+  - "*_raster_g_rr_1w_xiy"
+  - "*_raster_right_local_1_xiy"
+  - g_rr_1w
+  - g_22
+  - g_44
+I_2w_L:
+  - "*_raster_g_ll_2w_xiy"
+  - "*_raster_left_local_2_xiy"
+  - g_ll_2w
+I_2w_R:
+  - "*_raster_g_rr_2w_xiy"
+  - "*_raster_right_local_2_xiy"
+  - g_rr_2w
+I_2w_RL:
+  - "*_raster_g_rl_2w_xiy"
+  - "*_raster_left_nonlocal_2_xiy"
+  - g_rl_2w
+  - g2w_21
+  - g2w_43
+I_2w_LR:
+  - "*_raster_g_lr_2w_xiy"
+  - "*_right_nonlocal_2_xiy"
+  - g_lr_2w
+  - g2w_12
+  - g2w_34
+I_3w_L:
+  - "*_raster_g_ll_3w_xiy"
+  - "*_raster_left_local_3_xiy"
+  - "*_raster_l_local_3_xiy"
+  - g_ll_3w
+  - g3w_11
+  - g3w_33
+I_3w_R:
+  - "*_raster_g_rr_3w_xiy"
+  - "*_right_local_3_xiy"
+  - "*_raster_r_local_3_xiy"
+  - g_rr_3w
+  - g3w_22
+  - g3w_44
+cutter_pair_index:
+  - cutter_pair
+  - C
+  - c
+V_sideplunger_left_gate:
+  - "*_V_sideplunger_left_gate"
+V_sideplunger_right_gate:
+  - "*_V_sideplunger_right_gate"
+left_bias:
+  - biasL_Vdc
+  - bias_left
+  - lb0
+right_bias:
+  - biasR_Vdc
+  - bias_right
+  - rb0
+L_SI:
+  - SI_L
+R_SI:
+  - SI_R
+g_rl:
+  - G_RL
+  - "*_raster_g_rl_xiy"
+g_lr:
+  - G_LR
+  - "*_raster_g_lr_xiy"
+g_rr:
+  - G_RR
+  - "*_raster_g_rr_xiy"
+g_ll:
+  - G_LL
+  - "*_raster_g_ll_xiy"
+i_r:
+  - "*_raster_i_r_xiy"
+i_l:
+  - "*_raster_i_l_xiy"
