@@ -1,0 +1,93 @@
+line_properties:
+  stage_0:
+    Resistance_L: 500.0
+    Resistance_R: 500.0
+    Resistance_D: 250.0
+
+    Capacitance_L: 1.3346289021104486e-09
+    Capacitance_R: 1.3524498563436311e-09
+    Capacitance_D: 2.6870787584540797e-09
+
+    Capacitance_LR: 0.0
+    Capacitance_LD: 0.0
+    Capacitance_RD: 0.0
+
+  stage_1:
+    Resistance_L: 1200
+    Resistance_R: 1200
+    Resistance_D: 600.0
+
+    Capacitance_L: 2.2e-9
+    Capacitance_R: 2.2e-9
+    Capacitance_D: 4.4e-9
+
+    Capacitance_LR: 0.0
+    Capacitance_LD: 0.0
+    Capacitance_RD: 0.0
+
+  stage_2:
+    Resistance_L: 100.0
+    Resistance_R: 100.0
+    Resistance_D: 50.0
+
+    Capacitance_L: 1.0e-09
+    Capacitance_R: 1.0e-09
+    Capacitance_D: 2.0e-09
+
+    Capacitance_LR: 0.0
+    Capacitance_LD: 0.0
+    Capacitance_RD: 0.0
+
+  stage_3:
+    Resistance_L: 353
+    Resistance_R: 357
+    Resistance_D: 170
+
+    Capacitance_L: 2.1908361586780486e-10
+    Capacitance_R: 2.7943208865884047e-11
+    Capacitance_D: 2.470268247336889e-10
+
+    Capacitance_LR: 10.0e-12
+    Capacitance_LD: 10.0e-12
+    Capacitance_RD: 10.0e-12
+
+amplifier_properties:
+  amplifier_left:
+    input_impedance_0: 33.0
+    GWBP: 600.0e+6
+    gain: 1.0e+7
+    fcut: 1.0e+4
+
+  amplifier_right:
+    input_impedance_0: 33.0
+    GWBP: 600.0e+6
+    gain: 1.0e+7
+    fcut: 1.0e+4
+
+  setting_table:
+    gain:
+      1.0e+6:
+        fcut: 300.0e+3
+      1.0e+7:
+        fcut: 1.0e+4
+      1.0e+8:
+        fcut: 20.0e+3
+      1.0e+0:
+        fcut: 1.5e+3
+    fcut:
+      10.0e+3:
+        rise_time: 50.0e-6
+      3.0e+3:
+        rise_time: 100.0e-6
+      1.0e+3:
+        rise_time: 280.0e-6
+
+voltage_source_properties:
+  filters_left:
+    filter_amp_3dB: 10000.0
+  filters_left_phaseless:
+    filter_amp_3dB: 10000.0
+  filters_right:
+    filter_amp_3dB: 10000.0
+  filters_right_phaseless:
+    filter_amp_3dB: 10000.0
