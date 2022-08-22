@@ -1,0 +1,25 @@
+name: coverage
+
+on:
+  - push
+
+jobs:
+  coverage:
+    if: ${{ false }}  # disable for now
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        lfs: true
+    - name: Checkout LFS objects
+      run: git lfs checkout
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+    - name: Install dependencies
+      run: pip install nox codecov
+    - name: Test with nox
+      run: nox -e coverage
+    - name: Upload test coverage
+      run: codecov -t ${{ secrets.CODECOV_TOKEN }} -f .coverage.xml
