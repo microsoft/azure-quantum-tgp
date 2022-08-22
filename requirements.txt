@@ -1,0 +1,14 @@
+h5netcdf
+ipython
+ipywidgets
+jinja2
+matplotlib
+numpy
+pandas
+pyyaml
+scipy
+scikit-learn
+toolz
+tqdm
+typing_extensions
+xarray

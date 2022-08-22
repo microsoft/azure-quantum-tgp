@@ -1,4 +1,6 @@
 # Byte-compiled / optimized / DLL files
+tests/notebook_tests/test_notebooks.py
+
 __pycache__/
 *.py[cod]
 *$py.class
@@ -47,7 +49,6 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
-*.py,cover
 .hypothesis/
 .pytest_cache/
 
@@ -91,12 +92,8 @@ ipython_config.py
 #   install all needed dependencies.
 #Pipfile.lock
 
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow
-__pypackages__/
-
-# Celery stuff
+# celery beat schedule file
 celerybeat-schedule
-celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
@@ -127,3 +124,26 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+#VSCode
+.vscode/*
+.devcontainer/*
+
+# Pycharm
+.idea
+
+# Lock files
+*.lock
+
+# Mac
+**/.DS_Store
+
+# Visual Studio
+.vs/
+
+# Common temporary directories
+tmp/
+*.pkl
+
+# QCoDeS databases
+*.db

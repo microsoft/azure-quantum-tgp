@@ -1,0 +1,2 @@
+include tgp/*.yaml
+include requirements.txt
