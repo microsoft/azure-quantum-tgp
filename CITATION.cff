@@ -1,0 +1,266 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - given-names: Morteza
+    family-names: Aghaee
+  - given-names: Arun
+    family-names: Akkala
+  - given-names: Zulfi
+    family-names: Alam
+  - given-names: Rizwan
+    family-names: Ali
+  - given-names: Alejandro
+    family-names: Alcaraz Ramirez
+  - given-names: Mariusz
+    family-names: Andrzejczuk
+  - given-names: Andrey E
+    family-names: Antipov
+  - given-names: Pavel
+    family-names: Aseev
+  - given-names: Mikhail
+    family-names: Astafev
+  - given-names: Bela
+    family-names: Bauer
+  - given-names: Jonathan
+    family-names: Becker
+  - given-names: Srini
+    family-names: Boddapati
+  - given-names: Frenk
+    family-names: Boekhout
+  - given-names: Jouri
+    family-names: Bommer
+  - given-names: Esben Bork
+    family-names: Hansen
+  - given-names: Tom
+    family-names: Bosma
+  - given-names: Leo
+    family-names: Bourdet
+  - given-names: Samuel
+    family-names: Boutin
+  - given-names: Philippe
+    family-names: Caroff
+  - given-names: Lucas
+    family-names: Casparis
+  - given-names: Maja
+    family-names: Cassidy
+  - given-names: Sohail
+    family-names: Chatoor
+  - given-names: Anna Wulf
+    family-names: Christensen
+  - given-names: Noah
+    family-names: Clay
+  - given-names: William S
+    family-names: Cole
+  - given-names: Fabiano
+    family-names: Corsetti
+  - given-names: Ajuan
+    family-names: Cui
+  - given-names: Paschalis
+    family-names: Dalampiras
+  - given-names: Anand
+    family-names: Dokania
+  - given-names: Gijs
+    family-names: de Lange
+  - given-names: Michiel
+    family-names: de Moor
+  - given-names: Juan Carlos
+    family-names: Estrada Saldana
+  - given-names: Saeed
+    family-names: Fallahi
+  - given-names: Zahra Heidarnia
+    family-names: Fathabad
+  - given-names: John
+    family-names: Gamble
+  - given-names: Geoff
+    family-names: Gardner
+  - given-names: Deshan
+    family-names: Govender
+  - given-names: Flavio
+    family-names: Griggio
+  - given-names: Ruben
+    family-names: Grigoryan
+  - given-names: Sergei
+    family-names: Gronin
+  - given-names: Jan
+    family-names: Gukelberger
+  - given-names: Sebastian
+    family-names: Heedt
+  - given-names: Jesús Herranz
+    family-names: Zamorano
+  - given-names: Samantha
+    family-names: Ho
+  - given-names: Ulrik Laurens
+    family-names: Holgaard
+  - given-names: William Hvidtfelt Padkær
+    family-names: Nielsen
+  - given-names: Henrik
+    family-names: Ingerslev
+  - given-names: Linda
+    family-names: Johansson
+  - given-names: Jeffrey
+    family-names: Jones
+  - given-names: Ray
+    family-names: Kallaher
+  - given-names: Farhad
+    family-names: Karimi
+  - given-names: Torsten
+    family-names: Karzig
+  - given-names: Cameron
+    family-names: King
+  - given-names: Maren Elisabeth
+    family-names: Kloster
+  - given-names: Christina
+    family-names: Knapp
+  - given-names: Dariusz
+    family-names: Kocon
+  - given-names: Jonne
+    family-names: Koski
+  - given-names: Pasi
+    family-names: Kostamo
+  - given-names: Peter
+    family-names: Krogstrup
+  - given-names: Mahesh
+    family-names: Kumar
+  - given-names: Tom
+    family-names: Laeven
+  - given-names: Thorvald
+    family-names: Larsen
+  - given-names: Kongyi
+    family-names: Li
+  - given-names: Tyler
+    family-names: Lindemann
+  - given-names: Julie
+    family-names: Love
+  - given-names: Roman
+    family-names: Lutchyn
+  - given-names: Michael
+    family-names: Manfra
+  - given-names: Elvedin
+    family-names: Memisevic
+  - given-names: Trevor
+    family-names: Morgan
+  - given-names: Chetan
+    family-names: Nayak
+  - given-names: Bas
+    family-names: Nijholt
+  - given-names: Morten Hannibal
+    family-names: Madsen
+  - given-names: Signe
+    family-names: Markussen
+  - given-names: Esteban
+    family-names: Martinez
+  - given-names: Robert
+    family-names: McNeil
+  - given-names: Andrew
+    family-names: Mullally
+  - given-names: Jens
+    family-names: Nielsen
+  - given-names: Anne
+    family-names: Nurmohamed
+  - given-names: Eoin O
+    family-names: Farrell
+  - given-names: Keita
+    family-names: Otani
+  - given-names: Sebastian
+    family-names: Pauka
+  - given-names: Karl
+    family-names: Petersson
+  - given-names: Luca
+    family-names: Petit
+  - given-names: Dima
+    family-names: Pikulin
+  - given-names: Frank
+    family-names: Preiss
+  - given-names: Marina
+    family-names: Quintero Perez
+  - given-names: Katrine
+    family-names: Rasmussen
+  - given-names: Mohana
+    family-names: Rajpalke
+  - given-names: Davydas
+    family-names: Razmadze
+  - given-names: Outi
+    family-names: Reentila
+  - given-names: David
+    family-names: Reilly
+  - given-names: Richard
+    family-names: Rouse
+  - given-names: Ivan
+    family-names: Sadovskyy
+  - given-names: Lauri
+    family-names: Sainiemi
+  - given-names: Sydney
+    family-names: Schreppler
+  - given-names: Vadim
+    family-names: Sidorkin
+  - given-names: Amrita
+    family-names: Singh
+  - given-names: Shilpi
+    family-names: Singh
+  - given-names: Sarat
+    family-names: Sinha
+  - given-names: Patrick
+    family-names: Sohr
+  - given-names: Tomas
+    family-names: Stankevic
+  - given-names: Lieuwe
+    family-names: Stek
+  - given-names: Henri
+    family-names: Suominen
+  - given-names: Judith
+    family-names: Suter
+  - given-names: Vicky
+    family-names: Svidenko
+  - given-names: Sam
+    family-names: Teicher
+  - given-names: Mine
+    family-names: Temuerhan
+  - given-names: Nivetha
+    family-names: Thiyagarajah
+  - given-names: Raj
+    family-names: Tholapi
+  - given-names: Mason
+    family-names: Thomas
+  - given-names: Emily
+    family-names: Toomey
+  - given-names: Shivendra
+    family-names: Upadhyay
+  - given-names: Ivan
+    family-names: Urban
+  - given-names: Saulius
+    family-names: Vaitiekenas
+  - given-names: Kevin
+    family-names: van Hoogdalem
+  - given-names: Dmitrii V.
+    family-names: Viazmitinov
+  - given-names: Steven
+    family-names: Waddy
+  - given-names: David
+    family-names: van Woerkom
+  - given-names: Dominik
+    family-names: Vogel
+  - given-names: John
+    family-names: Watson
+  - given-names: Joseph
+    family-names: Weston
+  - given-names: Georg W.
+    family-names: Winkler
+  - given-names: Chung-Kai
+    family-names: Yang
+  - given-names: Sean
+    family-names: Yau
+  - given-names: Daniel
+    family-names: Yi
+  - given-names: Emrah
+    family-names: Yucelen
+  - given-names: Alex
+    family-names: Webster
+  - given-names: Roland
+    family-names: Zeisel
+  - given-names: Ruichen
+    family-names: Zhao
+title: "Code and data for 'InAs-Al Hybrid Devices Passing the Topological Gap Protocol'"
+version: 1.0.0
+date-released: 2022-11-15
+doi: 10.48550/arXiv.2207.02472
+repository-code: "https://github.com/microsoft/azure-quantum-tgp"
