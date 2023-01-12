@@ -7,9 +7,15 @@
 			"NODE_VERSION": "lts/*"
 		}
 	},
-
 	// Configure tool-specific properties.
 	"customizations": {
+		"codespaces": {
+			"openFiles": [
+				"notebooks/paper-figures.ipynb",
+				"notebooks/stage-one-analysis.ipynb",
+				"notebooks/stage-two-analysis.ipynb"
+			]
+		},
 		// Configure properties specific to VS Code.
 		"vscode": {
 			// Set *default* container specific settings.json values on container create.
@@ -27,7 +33,6 @@
 				"python.linting.pydocstylePath": "/usr/local/py-utils/bin/pydocstyle",
 				"python.linting.pylintPath": "/usr/local/py-utils/bin/pylint"
 			},
-
 			// Add the IDs of extensions you want installed when the container is created.
 			"extensions": [
 				"ms-python.python",
@@ -43,8 +48,7 @@
 		"memory": "8gb",
 		"storage": "32gb"
 	},
-    "features": {
-        "git-lfs": "latest"
-    }
-
+	"features": {
+		"git-lfs": "latest"
+	}
 }
