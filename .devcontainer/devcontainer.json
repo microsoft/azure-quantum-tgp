@@ -9,10 +9,20 @@
 	},
 	// Configure tool-specific properties.
 	"customizations": {
+		"codespaces": {
+			"openFiles": [
+				"README.md",
+				"notebooks/paper-figures.ipynb"
+			]
+		},
 		// Configure properties specific to VS Code.
 		"vscode": {
 			// Set *default* container specific settings.json values on container create.
 			"settings": {
+				"workbench.editorAssociations": {
+					"*.md": "vscode.markdown.preview.editor",
+					"*.ipynb": "jupyter-notebook"
+				},
 				"python.defaultInterpreterPath": "/opt/conda/bin/python",
 				"python.linting.enabled": true,
 				"python.linting.pylintEnabled": true,
@@ -43,11 +53,5 @@
 	},
 	"features": {
 		"git-lfs": "latest"
-	},
-	"settings": {
-		"workbench.editorAssociations": {
-			"*.md": "vscode.markdown.preview.editor",
-			"*.ipynb": "jupyter-notebook"
-		}
 	}
 }
