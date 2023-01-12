@@ -1,5 +1,5 @@
 # Topological gap protocol: `azure-quantum-tgp`
-<img width="308" alt="tgp" align="left" src="https://user-images.githubusercontent.com/6897215/196533626-f573acab-15d3-4fe9-932e-12cae7cc251f.png">
+<img width="308" alt="tgp" align="left" style="padding:50px" src="https://user-images.githubusercontent.com/6897215/196533626-f573acab-15d3-4fe9-932e-12cae7cc251f.png">
 
 This code performs the analysis as reported in _"InAs-Al Hybrid Devices Passing the Topological Gap Protocol"_ by Microsoft Azure Quantum.
 

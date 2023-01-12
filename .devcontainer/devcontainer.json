@@ -11,6 +11,7 @@
 	"customizations": {
 		"codespaces": {
 			"openFiles": [
+				"README.md",
 				"notebooks/paper-figures.ipynb",
 				"notebooks/stage-one-analysis.ipynb",
 				"notebooks/stage-two-analysis.ipynb"
