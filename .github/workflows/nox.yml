@@ -45,7 +45,6 @@ jobs:
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         git commit -m "Add executed notebook" -a
-        git fetch --unshallow
     - name: Push notebooks
       if: matrix.platform == 'ubuntu-latest' && matrix.python-version == '3.10'
       uses: ad-m/github-push-action@master
