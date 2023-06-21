@@ -7,7 +7,7 @@ import functools
 import getpass
 from numbers import Number
 import platform
-from typing import Any, Iterable, NamedTuple
+from typing import Any, Callable, Iterable, Literal, NamedTuple, TypeVar
 
 import joblib
 import numpy
@@ -20,14 +20,19 @@ import xarray as xr
 
 import tgp
 
-memory = joblib.Memory("cachedir")
+memory = joblib.Memory("cachedir", verbose=0)
+
+PassingOptions = Literal["passed", "failed", "inconclusive"]
+
+
+T = TypeVar("T")
 
 
 def ds_requires(
     variables: tuple[str | set[str], ...] = (),
     dims: tuple[str | set[str], ...] = (),
     sets_variables: tuple[str | set[str], ...] = (),
-):
+) -> Callable[[Callable[..., xr.Dataset]], Callable[..., xr.Dataset]]:
     """Decorate function to assert that a dataset has the required variables and dimensions.
 
     When variables or dimensions are a set of strings, the dataset must have any of them.
@@ -46,12 +51,12 @@ def ds_requires(
         and they must be data variables.
     """
 
-    def is_in(x: Iterable[str], k: str | set[str]):
+    def is_in(x: Iterable[str], k: str | set[str]) -> bool:
         return any(_k in x for _k in k) if isinstance(k, set) else k in x
 
-    def decorator(f):
+    def decorator(f: Callable[..., xr.Dataset]) -> Callable[..., xr.Dataset]:
         @functools.wraps(f)
-        def _wrapped(*args, **kwargs):
+        def _wrapped(*args, **kwargs) -> xr.Dataset:
             ds = args[0]
             for v in variables + tuple(kwargs.get("keys", ())):
                 if not is_in(ds.variables, v):
@@ -90,7 +95,7 @@ def _data_clusters(
     *,
     min_samples: int = 3,
     xi: float = 0.1,
-    min_cluster_size: float = 0.01,
+    min_cluster_size: float | int = 0.01,
     max_eps: float = 10.0,
     flatten: bool = False,
 ) -> np.ndarray:
@@ -104,7 +109,7 @@ def _data_clusters(
         )
         labels = model.fit_predict(X)
     else:
-        labels = [1] * X.shape[0]
+        labels = [-1] * X.shape[0]
 
     data_clusters = []
     for label in np.unique(labels):
@@ -125,7 +130,7 @@ def _data_clusters(
     return data_clusters if not flatten else _np_flatten(data_clusters)
 
 
-def _np_flatten(arr):
+def _np_flatten(arr: np.ndarray) -> np.ndarray:
     overlap = np.zeros(arr.shape[1:], dtype=int)
     if arr.shape[0] == 0:
         return overlap
@@ -146,21 +151,28 @@ def flatten_clusters(da: xr.DataArray, *, dim: str = "cluster") -> xr.DataArray:
 
 
 def expand_clusters(
-    da: xr.DataArray, *, dim: str = "cluster", zeros_if_empty: bool = False
+    da: xr.DataArray,
+    *,
+    dim: str = "cluster",
+    zeros_if_empty: bool = False,
 ) -> xr.DataArray:
     """Expand clusters array of shape (N, M) with numbers from 0 to K to shape (N, M, K-1)."""
-    clusters = np.arange(1, da.values.max() + 1)
+    max_cluster = da.values.max() if da.size > 0 else 0
+    clusters = np.arange(1, max_cluster + 1)
     if clusters.size == 0:
         if zeros_if_empty:
             return xr.zeros_like(da, dtype=bool)
         coords = {dim: np.array(()), **da.coords}
         return xr.DataArray(
-            np.empty((0, *da.shape)), coords=coords, dims=(dim, *da.dims)
+            np.empty((0, *da.shape)),
+            coords=coords,
+            dims=(dim, *da.dims),
         )
-    return xr.concat(
+    da_clusters = xr.concat(
         [da.where(da == i, other=0).astype(bool) for i in clusters],
-        dim=xr.DataArray(clusters, dims=dim),
+        dim=dim,
     )
+    return da_clusters.assign_coords({dim: clusters})
 
 
 def _xr_data_clusters(
@@ -168,19 +180,19 @@ def _xr_data_clusters(
     *,
     min_samples: int = 3,
     xi: float = 0.1,
-    min_cluster_size: float = 0.01,
+    min_cluster_size: float | int = 0.01,
     max_eps: float = 10.0,
 ) -> xr.DataArray:
     clusters = xr.apply_ufunc(
         _data_clusters,
         da,
-        kwargs=dict(
-            min_samples=min_samples,
-            xi=xi,
-            min_cluster_size=min_cluster_size,
-            max_eps=max_eps,
-            flatten=True,
-        ),
+        kwargs={
+            "min_samples": min_samples,
+            "xi": xi,
+            "min_cluster_size": min_cluster_size,
+            "max_eps": max_eps,
+            "flatten": True,
+        },
         input_core_dims=[("B", "V")],
         output_core_dims=[("B", "V")],
         vectorize=True,
@@ -196,7 +208,7 @@ def set_clusters_of(
     *,
     min_samples: int = 3,
     xi: float = 0.1,
-    min_cluster_size: float = 0.01,
+    min_cluster_size: float | int = 0.01,
     max_eps: float = 10.0,
     force: bool = False,
 ) -> xr.DataArray | None:
@@ -227,7 +239,7 @@ def set_clusters_of(
         raise ThresholdException(
             f"Number of samples in `ds.{to_cluster_name}` is less"
             f" than `min_samples={min_samples}`. Either lower the threshold"
-            " or reduce `min_samples`."
+            " or reduce `min_samples`.",
         )
     data_clusters = _xr_data_clusters(
         ds[to_cluster_name],
@@ -265,8 +277,9 @@ class ClusterInfo(NamedTuple):
     center: tuple[float, float] = 2 * (np.nan,)
     size: tuple[float, float] = 2 * (np.nan,)
     area: float = np.nan
+    npixels: int = np.nan
 
-    def as_xarray(self) -> xr.Dataset:
+    def as_xarray(self: ClusterInfo) -> xr.Dataset:
         """Convert namedtuple to `xarray.Dataset`."""
         (x_min, y_min, x_max, y_max) = self.bounding_box
         (x_center, y_center) = self.center
@@ -281,6 +294,7 @@ class ClusterInfo(NamedTuple):
             "cluster_B_size": {"data": x_size, "dims": []},
             "cluster_V_size": {"data": y_size, "dims": []},
             "cluster_area": {"data": self.area, "dims": []},
+            "cluster_npixels": {"data": self.npixels, "dims": []},
         }
         return xr.Dataset.from_dict(info)
 
@@ -345,7 +359,12 @@ def cluster_info(
     mid = cluster.isel(**mid_inds)
     center = (mid.coords[field_name].data, mid.coords[plunger_gate_name].data)
 
-    area = cluster.integrate("B").integrate("V")
+    dB = cluster.B.values[1] - cluster.B.values[0]
+    dV = cluster.V.values[1] - cluster.V.values[0]
+    np.testing.assert_allclose(dB, np.diff(cluster.B.values))
+    np.testing.assert_allclose(dV, np.diff(cluster.V.values))
+    npixels = cluster.sum(["B", "V"])
+    area = npixels * dB * dV
 
     bounding_box = tuple(map(float, bounding_box))
     center = tuple(map(float, center))
@@ -389,16 +408,24 @@ def cluster_infos(
     ]
 
 
-def xr_map(ds, f, dim: str, kwargs: dict[str, Any] | None = None):
+def xr_map(
+    da: xr.DataArray,
+    f: Callable,
+    dim: str,
+    kwargs: dict[str, Any] | None = None,
+) -> xr.DataArray:
     """Map function over dimension and concatenate the results."""
     if kwargs is None:
         kwargs = {}
     _f = functools.partial(f, **kwargs)
-    return xr.concat([_f(ds.sel({dim: i})) for i in ds[dim]], dim)
+    return xr.concat([_f(da.sel({dim: i})) for i in da[dim]], dim)
 
 
 def groupby_map(
-    func, da: xr.DataArray, exclude_dims: tuple[str, ...] = (), **kwargs: Any
+    func: Callable[..., Any],
+    da: xr.DataArray,
+    exclude_dims: tuple[str, ...] = (),
+    **kwargs,
 ) -> xr.DataArray | xr.Dataset:
     """Map a function over a groupby object."""
     other_dims = [d for d in da.dims if d not in exclude_dims]
@@ -409,7 +436,7 @@ def groupby_map(
         return func(da, **kwargs)
 
 
-def get_metadata():
+def code_metadata() -> dict[str, str]:
     """Get metadata for the current analysis."""
     return {
         "metadata.version.python": platform.python_version(),

@@ -1,7 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 
-"""
-Finite frequency voltage divider correction for the conductance matrix in three
+"""Finite frequency voltage divider correction for the conductance matrix in three
 terminal devices.
 
 """
@@ -11,15 +10,17 @@ import itertools
 import json
 
 import numpy as np
+from ruamel.yaml import YAML
 from scipy.constants import e, h
 from toolz.dicttoolz import get_in
 import xarray
 import xarray as xr
-import yaml
 
 
 def generate_filter_stage_mapping_generic(
-    frequency: float, R: np.ndarray, C: np.ndarray
+    frequency: float,
+    R: np.ndarray,
+    C: np.ndarray,
 ) -> np.ndarray:
     """Generate a matrix representation of a filter stage with N input and output
     lines mapping the voltages and currents at the input lines to voltages and
@@ -29,7 +30,6 @@ def generate_filter_stage_mapping_generic(
     1. parallel capacitance C[n][n] from input n to ground
     2. parallel capacitance C[n][m] from input n to the input of line m
     3. resistance R[n] between the input and the output
-
 
     Parameters
     ----------
@@ -44,7 +44,6 @@ def generate_filter_stage_mapping_generic(
     -------
     mapping of type numpy.ndarray
     """
-
     ports = len(R)
     M = np.zeros([2 * ports, 2 * ports], dtype=complex)
     frequency_multiplier = 2j * np.pi * frequency
@@ -72,8 +71,7 @@ def generate_amplifier_circuit_3T(
     right_gwbp: float,
     drain_imp: float = 50.0,
 ) -> np.ndarray:
-    """
-    Generate a 'filter stage' only comprising of the current preamplifier
+    """Generate a 'filter stage' only comprising of the current preamplifier
     input impedances in a 3T setup. Capacitances are assumed to be
     negligible at this stage.
 
@@ -102,7 +100,6 @@ def generate_amplifier_circuit_3T(
     -------
         a mapping of type numpy.ndarray
     """
-
     Zin_L = left_amp_input_imp_0 + frequency * left_gain / left_gwbp
     Zin_R = right_amp_input_imp_0 + frequency * right_gain / right_gwbp
 
@@ -154,14 +151,13 @@ def generate_filter_stage_3T(
     -------
     a mapping of type numpy.ndarray
     """
-
     R = np.array([res_L, res_R, res_D])
     C = np.array(
         [
             [cap_L + cap_LR + cap_LD, cap_LR, cap_LD],
             [cap_LR, cap_R + cap_LR + cap_RD, cap_RD],
             [cap_LD, cap_RD, cap_D + cap_LD + cap_RD],
-        ]
+        ],
     )
 
     return generate_filter_stage_mapping_generic(frequency, R, C)
@@ -182,7 +178,6 @@ def reduce_mapping(M: np.ndarray) -> np.ndarray:
     -------
     a reduced 4 x 4 mapping
     """
-
     M_1 = np.zeros([5, 5], dtype=complex)
 
     for k, i in itertools.product(range(5), range(5)):
@@ -201,8 +196,7 @@ def voltage_scaling_output_only(
     filters_left: dict[str, float],
     filters_right: dict[str, float],
 ) -> tuple[complex, complex]:
-    """
-    Determine the multipliers for the voltage amplitude to apply the specified
+    """Determine the multipliers for the voltage amplitude to apply the specified
     voltages at the cryostat input corrected for the voltage output filters.
 
     For example, to apply 10 uV AC excitation at the cryostat input to left
@@ -226,7 +220,6 @@ def voltage_scaling_output_only(
     -------
     Tuple of complex values v_output_scaling_left and v_output_scaling_right
     """
-
     v_output_scaling_left = complex(1)
     for value in filters_left.values():
         v_output_scaling_left /= 1 + 1j * frequency_left / value
@@ -298,7 +291,6 @@ def include_filter_contributions(
     -------
     a mapping of type numpy.ndarray
     """
-
     M_out = M.copy()
 
     V_output_scaling_left, V_output_scaling_right = voltage_scaling_output_only(
@@ -335,7 +327,9 @@ def include_filter_contributions(
 
 
 def generate_mapping(
-    frequency: float, fridge_parameters: dict, reduced: bool = True
+    frequency: float,
+    fridge_parameters: dict,
+    reduced: bool = True,
 ) -> np.ndarray:
     """Generate a matrix that maps the voltages applied and currents measured
     to voltages and currents at the 3T device. The mapping is generated for
@@ -416,7 +410,6 @@ def generate_mapping(
     -------
     mapping of type numpy.ndarray
     """
-
     line_properties = fridge_parameters["line_properties"]
     amplifier_properties = fridge_parameters["amplifier_properties"]
     voltage_source_properties = fridge_parameters["voltage_source_properties"]
@@ -438,7 +431,7 @@ def generate_mapping(
         right_gwbp,
     )
 
-    for stage in line_properties.keys():
+    for stage in line_properties:
         res_L = line_properties[stage]["Resistance_L"]
         res_R = line_properties[stage]["Resistance_R"]
         res_D = line_properties[stage]["Resistance_D"]
@@ -452,7 +445,16 @@ def generate_mapping(
         cap_RD = line_properties[stage]["Capacitance_RD"]
 
         M1 = generate_filter_stage_3T(
-            frequency, res_L, res_R, res_D, cap_L, cap_R, cap_D, cap_LR, cap_LD, cap_RD
+            frequency,
+            res_L,
+            res_R,
+            res_D,
+            cap_L,
+            cap_R,
+            cap_D,
+            cap_LR,
+            cap_LD,
+            cap_RD,
         )
         M = np.matmul(M1, M)
 
@@ -490,7 +492,7 @@ def convert_conductances_array(
     g_rr: xarray.Dataset,
     map_left: np.ndarray,
     map_right: np.ndarray,
-):
+) -> tuple[xarray.Dataset, xarray.Dataset, xarray.Dataset, xarray.Dataset]:
     """Convert the conductances.
 
     Parameters
@@ -517,7 +519,6 @@ def convert_conductances_array(
     -------
     A tuple of converted g_ll, g_rl, g_lr, g_rr.
     """
-
     g0 = e**2 / h
 
     i_ll = g_ll * g0
@@ -545,8 +546,9 @@ def convert_conductances_array(
     return g_ll_out, g_rl_out, g_lr_out, g_rr_out
 
 
-def _freq(ds: xr.Dataset, lockin: str, fridge_parameters: dict) -> np.ndarray:
-    snapshot = json.loads(ds.snapshot)
+def _freq_from_snapshot(snapshot: dict | str, lockin: str) -> float:
+    if isinstance(snapshot, str):
+        snapshot = json.loads(snapshot)
     keys = [
         "station",
         "instruments",
@@ -560,13 +562,12 @@ def _freq(ds: xr.Dataset, lockin: str, fridge_parameters: dict) -> np.ndarray:
         "value",
     ]
     try:
-        freq = get_in(keys, snapshot, no_default=True)
+        return get_in(keys, snapshot, no_default=True)
     except KeyError:
         keys = tuple(snapshot["station"]["instruments"].keys())
         raise KeyError(
-            f"The key lockin={lockin} is not found in `ds.snapshot`, pick one of {keys}."
+            f"The key lockin={lockin} is not found in `ds.snapshot`, pick one of {keys}.",
         ) from None
-    return generate_mapping(freq, fridge_parameters)
 
 
 def apply_phase_shift(
@@ -574,7 +575,7 @@ def apply_phase_shift(
     ds_right: xr.Dataset,
     phase_shift_left: float,
     phase_shift_right: float,
-):
+) -> None:
     """Apply a phase shift to the conductances."""
     phase_factor_left = np.exp(1.0j * phase_shift_left * np.pi / 180.0)
     phase_factor_right = np.exp(1.0j * phase_shift_right * np.pi / 180.0)
@@ -590,9 +591,11 @@ def correct_frequencies(
     ds_right: xr.Dataset,
     lockin_left: str,
     lockin_right: str,
-    fridge_parameters: dict | str,
+    fridge_parameters: dict | str | None = None,
     phase_shift_left: float = 0.0,
     phase_shift_right: float = 0.0,
+    freq_left: np.ndarray | None = None,
+    freq_right: np.ndarray | None = None,
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """Correct the conductance data.
 
@@ -613,6 +616,12 @@ def correct_frequencies(
         Phase shift of the conductance data on the left in degrees.
     phase_shift_right
         Phase shift of the conductance data on the right in degrees.
+    freq_left
+        Frequency mapping of the left lockin. If None, it is
+        generated from the snapshot and fridge parameters.
+    freq_right
+        Frequency mapping of the right lockin. If None, it is
+        generated from the snapshot and fridge parameters.
 
     Returns
     -------
@@ -629,19 +638,31 @@ def correct_frequencies(
 
     apply_phase_shift(ds_left, ds_right, phase_shift_left, phase_shift_right)
 
-    if not isinstance(fridge_parameters, dict):
-        with open(fridge_parameters) as f:
-            fridge_parameters = yaml.safe_load(f)
-    freq_left, freq_right = (
-        _freq(ds, lockin, fridge_parameters)
-        for ds, lockin in [(ds_left, lockin_left), (ds_right, lockin_right)]
-    )
+    if freq_left is None and freq_right is None:
+        if fridge_parameters is None:
+            raise ValueError(
+                "fridge_parameters must be provided if freq_left and freq_right are None.",
+            )
+        if not isinstance(fridge_parameters, dict):
+            with open(fridge_parameters) as f:
+                fridge_parameters = YAML(typ="safe").load(f)
+        freq_left, freq_right = (
+            _freq_from_snapshot(ds.snapshot, lockin)
+            for ds, lockin in [(ds_left, lockin_left), (ds_right, lockin_right)]
+        )
+
     (g_ll, g_rl, _, _), (_, _, g_lr, g_rr) = (
         convert_conductances_array(
-            ds["g_ll"], ds["g_rl"], ds["g_lr"], ds["g_rr"], freq_left, freq_right
+            ds["g_ll"],
+            ds["g_rl"],
+            ds["g_lr"],
+            ds["g_rr"],
+            generate_mapping(freq_left, fridge_parameters),
+            generate_mapping(freq_right, fridge_parameters),
         )
         for ds in (ds_left, ds_right)
     )
+
     left = xr.Dataset({"g_ll": g_ll.real, "g_rl": g_rl.real})
     right = xr.Dataset({"g_lr": g_lr.real, "g_rr": g_rr.real})
 
@@ -650,6 +671,9 @@ def correct_frequencies(
         "correct_frequencies.lockin_right": lockin_right,
         "correct_frequencies.phase_shift_left": phase_shift_left,
         "correct_frequencies.phase_shift_right": phase_shift_right,
+        "correct_frequencies.freq_left": freq_left,
+        "correct_frequencies.freq_right": freq_right,
+        "correct_frequencies.fridge_parameters": fridge_parameters,
     }
     left.attrs.update(ds_left.attrs)
     left.attrs.update(attrs)
@@ -659,8 +683,7 @@ def correct_frequencies(
 
 
 def output_current_closed(Map: np.ndarray, V: list[float]) -> np.ndarray:
-    """
-    Evaluate the predicted measured current when all conductances are zero
+    """Evaluate the predicted measured current when all conductances are zero
     for a given mapping and excitation voltage.
 
     Parameters
@@ -675,7 +698,6 @@ def output_current_closed(Map: np.ndarray, V: list[float]) -> np.ndarray:
     -------
     Predicted measured current as numpy array.
     """
-
     # Translate the voltage(s) applied into a vector
     V_vec = np.array([V[0], V[1]], dtype=complex)
 
@@ -686,8 +708,7 @@ def output_current_closed(Map: np.ndarray, V: list[float]) -> np.ndarray:
 
 
 def output_current_open(Map: np.ndarray, V: list[float]) -> np.ndarray:
-    """
-    Evaluate the predicted measured current when all conductances are infinite
+    """Evaluate the predicted measured current when all conductances are infinite
     for a given mapping and excitation voltage.
 
     Parameters
@@ -702,7 +723,6 @@ def output_current_open(Map: np.ndarray, V: list[float]) -> np.ndarray:
     -------
     Predicted measured current as numpy array.
     """
-
     # Translate the voltage(s) applied into a vector
     V_vec = np.array([V[0], V[1]], dtype=complex)
 

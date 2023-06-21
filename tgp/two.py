@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Literal, NamedTuple, Tuple
+from typing import Any, Literal, NamedTuple
 import warnings
 
 import numpy as np
@@ -15,19 +15,13 @@ import xarray as xr
 import tgp
 from tgp.common import (
     CLUSTER_INFO_VARIABLES,
+    code_metadata,
     ds_requires,
     expand_clusters,
     flatten_clusters,
-    get_metadata,
     groupby_map,
     xr_map,
 )
-
-try:
-    from typing import TypeAlias
-except ImportError:
-
-    from typing_extensions import TypeAlias
 
 
 def _smooth_deriv_per_side(
@@ -51,7 +45,7 @@ def _smooth_deriv_per_side(
         window_length = int(2 * bias_window / delta)
     else:
         raise ValueError(
-            "Bias window must be smaller or equal than the bias range in the data"
+            "Bias window must be smaller or equal than the bias range in the data",
         )
     if window_length % 2 == 0:
         window_length += 1
@@ -83,8 +77,7 @@ def zbp_dataset_derivative(
     polyorder: int = 2,
     average_over_cutter: bool = True,
 ) -> xr.Dataset:
-    """
-    Create new `xarray.Dataset` containing ZBP maps.
+    """Create new `xarray.Dataset` containing ZBP maps.
 
     Has ZBP on left and right sides, and a joint map indicating
     where ZBPs are present with a probability higher than a certain threshold.
@@ -111,13 +104,15 @@ def zbp_dataset_derivative(
     xarray.Dataset
         A dataset containing information about the postions of ZBPs.
     """
-    kwargs = dict(
-        bias_window=bias_window, polyorder=polyorder, average_over_cutter=False
-    )
+    kwargs = {
+        "bias_window": bias_window,
+        "polyorder": polyorder,
+        "average_over_cutter": False,
+    }
     left = _smooth_deriv_per_side(ds_left, side="left", **kwargs)
     right = _smooth_deriv_per_side(ds_right, side="right", **kwargs)
-    P_left = (left <= -derivative_threshold).squeeze()
-    P_right = (right <= -derivative_threshold).squeeze()
+    P_left = left <= -derivative_threshold
+    P_right = right <= -derivative_threshold
     if average_over_cutter and ("cutter_pair_index" in P_left.indexes):
         P_left = P_left.mean("cutter_pair_index")
         P_right = P_right.mean("cutter_pair_index")
@@ -127,7 +122,7 @@ def zbp_dataset_derivative(
             "right": P_right,
             "zbp": (P_right >= zbp_probability_threshold)
             * (P_left >= zbp_probability_threshold),
-        }
+        },
     )
     zbp_ds = drop_dimensionless_variables(zbp_ds)
     prefix = "zbp_dataset_derivative"
@@ -138,8 +133,10 @@ def zbp_dataset_derivative(
             f"{prefix}.bias_window": bias_window,
             f"{prefix}.polyorder": polyorder,
             f"{prefix}.average_over_cutter": average_over_cutter,
-            **get_metadata(),
-        }
+            "extra.max_left_bias": float(abs(ds_left.left_bias).max()),
+            "extra.max_right_bias": float(abs(ds_right.right_bias).max()),
+            **code_metadata(),
+        },
     )
     if guid := ds_left.attrs.get("guid"):
         zbp_ds.attrs["guid.left"] = guid
@@ -147,12 +144,12 @@ def zbp_dataset_derivative(
         zbp_ds.attrs["guid.right"] = guid
 
     # Set gap if possible
-    if "gap" in ds_left.variables.keys():
+    if "gap" in ds_left.variables:
         set_zbp_gap(zbp_ds, ds_left, ds_right)
     else:
         warnings.warn("No gap variable found in the data, call `set_zbp_gap` first.")
 
-    if "L_SI" in ds_left.variables.keys():
+    if "L_SI" in ds_left.variables:
         L_SI = (ds_left.L_SI < 0).astype(bool)
         R_SI = (ds_right.R_SI < 0).astype(bool)
         L_SI = L_SI.sum(dim="cutter_pair_index").astype(bool)
@@ -166,7 +163,7 @@ def zbp_dataset_derivative(
     return zbp_ds
 
 
-def drop_dimensionless_variables(ds, skip: set | None = None):
+def drop_dimensionless_variables(ds: xr.Dataset, skip: set | None = None) -> xr.Dataset:
     """Drop dimensionless variables from a dataset."""
     skip = skip or set()
     to_drop = [
@@ -200,6 +197,8 @@ def extract_gap_from_trace(
     float
         gap
     """
+    bool_array = np.asarray(bool_array)
+    bias_array = np.asarray(bias_array)
     i_zero = np.argmin(np.abs(bias_array))  # Index of the bias zero.
     bool_array = bool_array[i_zero:]
     bias_array = bias_array[i_zero:]
@@ -216,7 +215,7 @@ def extract_gap_from_trace(
 
 
 def determine_gap(
-    conductance: xr.Dataset,
+    conductance: xr.DataArray,
     bias_name: str,
     field_name: str | None = "B",
     median_size: float = 2,
@@ -227,8 +226,7 @@ def determine_gap(
     filtered_antisym_g: bool = False,
     max_gap_mode: Literal["nan", "max_bias"] = "max_bias",
 ) -> xr.DataArray | tuple[xr.DataArray, xr.DataArray]:
-    """
-    Extract the gap from a 2D array (non-local conductance vs bias and field)
+    """Extract the gap from a 2D array (non-local conductance vs bias and field)
     using thresholding of filtered data.
 
     Parameters
@@ -261,6 +259,8 @@ def determine_gap(
     xarray.DataArray or Tuple[xarray.DataArray, xarray.DataArray]
         Estimates of the gap.
     """
+    if conductance.size == 0:
+        raise ValueError("conductance is an empty array.")
 
     if field_name is None:
         vectorize = False
@@ -270,28 +270,30 @@ def determine_gap(
         dims = [bias_name, field_name]
 
     conductance = conductance.load()
-    defaults = dict(
-        input_core_dims=[dims],
-        output_core_dims=[dims],
-        vectorize=vectorize,
-    )
+    defaults = {
+        "input_core_dims": [dims],
+        "output_core_dims": [dims],
+        "vectorize": vectorize,
+    }
     conductance = xr.apply_ufunc(
         scipy.ndimage.median_filter,
         conductance,
-        kwargs=dict(size=median_size),
+        kwargs={"size": median_size},
         **defaults,
     )
     antisymmetric_conductance = antisymmetric_conductance_part(
-        conductance, bias_name, field_name
+        conductance,
+        bias_name,
+        field_name,
     )
     filtered = xr.apply_ufunc(
         scipy.ndimage.gaussian_filter,
         antisymmetric_conductance,
-        kwargs=dict(sigma=gauss_sigma),
+        kwargs={"sigma": gauss_sigma},
         **defaults,
     )
 
-    def gap_thresholding(G):
+    def gap_thresholding(G: np.ndarray) -> np.ndarray:
         f = gap_threshold_factor * min(np.max(G), upper_conductance_threshold)
         return np.abs(G) > max(f, noise_threshold)
 
@@ -302,7 +304,7 @@ def determine_gap(
         binary[bias_name],
         input_core_dims=[[bias_name], [bias_name]],
         output_core_dims=[[]],
-        kwargs=dict(max_gap_mode=max_gap_mode),
+        kwargs={"max_gap_mode": max_gap_mode},
         vectorize=True,
     )
     gap.attrs.update(
@@ -369,7 +371,7 @@ def extract_gap(
                 f"{prefix}.upper_conductance_threshold": upper_conductance_threshold,
                 f"{prefix}.noise_threshold": noise_threshold,
                 f"{prefix}.max_gap_mode": max_gap_mode,
-            }
+            },
         )
     return ds_left, ds_right
 
@@ -378,7 +380,7 @@ def extract_gap(
 def set_gap_threshold(
     zbp_ds: xr.Dataset,
     threshold_low: float = 10e-3,
-    threshold_high: float | None = None,
+    threshold_high: float | None = 70e-3,
 ) -> None:
     """Set the gap threshold for a stage 2 dataset.
 
@@ -403,7 +405,7 @@ def set_gap_threshold(
         {
             f"{prefix}.threshold_low": threshold_low,
             f"{prefix}.threshold_high": threshold_high,
-        }
+        },
     )
 
 
@@ -412,11 +414,11 @@ def set_zbp_gap(
     zbp_ds: xr.Dataset,
     ds_left: xr.Dataset,
     ds_right: xr.Dataset,
-):
+) -> None:
     """Add ``zbp_ds["gap"]`` based on the minimal gap of the left and right dataset."""
     # Take the minimum of both gaps, but when one gap is NaN and the other is not, take the value.
-    left = ds_left.gap.squeeze().copy()
-    right = ds_right.gap.squeeze().copy()
+    left = ds_left.gap.copy()
+    right = ds_right.gap.copy()
     left = left.where(~np.isnan(left), np.inf)
     right = right.where(~np.isnan(right), np.inf)
     gap = np.minimum(left, right)
@@ -447,7 +449,6 @@ def _gapless_boundary(
         - Percentage of the boundary that is gapless.
         - Dictionary with boundary indices -> bool
     """
-
     ###### For pixels inside the cluster ######
 
     s = max(1, variance // 2)
@@ -554,16 +555,43 @@ def set_score(
     add_attrs
         Whether to add the input parameters as attributes to the dataset.
     """
-    dim = "zbp_cluster_number"
-    clusters = expand_clusters(zbp_ds["gapped_zbp_cluster"], dim=dim)
+    _set_score(
+        zbp_ds,
+        variance,
+        with_overlaps,
+        add_attrs,
+        dim="zbp_cluster_number",
+        data_var="gapped_zbp_cluster",
+    )
+
+
+def _set_score(
+    zbp_ds: xr.Dataset,
+    variance: int = 3,
+    with_overlaps: bool = False,
+    add_attrs: bool = True,
+    dim: str = "zbp_cluster_number",
+    data_var: str = "gapped_zbp_cluster",
+) -> None:
+    clusters = expand_clusters(zbp_ds[data_var], dim=dim)
     if clusters.coords[dim].shape == (0,):
-        empty = clusters.copy().sum(["B", "V"])
+        has_cutter = "cutter_pair_index" in zbp_ds[data_var].dims
+        clusters_copy = clusters.copy()
+        empty = clusters_copy.sum(["B", "V"])
         keys = list(SCORE_VARIABLES)
-        if with_overlaps and "cutter_pair_index" in zbp_ds.gapped_zbp_cluster.dims:
+        if with_overlaps and has_cutter:
             keys.extend(list(SCORE_VARIABLES_OPTIONAL))
         for k in keys:
-            empty.name = k
-            zbp_ds[k] = empty.copy()
+            if k == "roi2":
+                # Needs dimensions with (B, V)
+                roi2 = flatten_clusters(clusters_copy, dim="zbp_cluster_number")
+                if has_cutter:
+                    roi2 = roi2.sum("cutter_pair_index")
+                roi2.name = k
+                zbp_ds[k] = roi2.copy()
+            else:
+                empty.name = k
+                zbp_ds[k] = empty.copy()
         return
 
     boundary_indices_set = xr.apply_ufunc(
@@ -581,14 +609,15 @@ def set_score(
         input_core_dims=[[], ["V", "B"]],
         output_core_dims=[[], []],
         vectorize=True,
-        kwargs=dict(variance=variance),
+        kwargs={"variance": variance},
     )
 
-    cluster_volume = clusters.integrate("B").integrate("V")
-    cluster_npixels = clusters.sum(["B", "V"])
-
     info = groupby_map(
-        tgp.common.cluster_info, clusters, ("B", "V"), as_xarray=True, pct_box=0
+        tgp.common.cluster_info,
+        clusters,
+        ("B", "V"),
+        as_xarray=True,
+        pct_box=0,
     )
     for k, v in info.data_vars.items():
         zbp_ds[k] = v
@@ -612,14 +641,13 @@ def set_score(
     zbp_ds["nonlocal_score_median"] = median_gap * percentage_boundary
     zbp_ds["nonlocal_score_average"] = average_gap * percentage_boundary
     zbp_ds["nonlocal_score_max"] = max_gap
-    zbp_ds["cluster_volume"] = cluster_volume
-    zbp_ds["cluster_npixels"] = cluster_npixels
+    zbp_ds["cluster_volume"] = zbp_ds["cluster_area"]
 
-    if with_overlaps and "cutter_pair_index" in zbp_ds.gapped_zbp_cluster.dims:
-        zbp_ds["cluster_sets"] = get_overlapping_clusters(zbp_ds.gapped_zbp_cluster)
+    if with_overlaps and "cutter_pair_index" in zbp_ds[data_var].dims:
+        zbp_ds["cluster_sets"] = get_overlapping_clusters(zbp_ds[data_var])
         zbp_ds["nclusters"] = get_nclusters(zbp_ds.cluster_sets)
-        zbp_ds["ncutters"] = get_ncutters(zbp_ds.gapped_zbp_cluster)
-        roi2 = construct_roi2(zbp_ds.gapped_zbp_cluster, zbp_ds.cluster_sets)
+        zbp_ds["ncutters"] = get_ncutters(zbp_ds[data_var])
+        roi2 = construct_roi2(zbp_ds[data_var], zbp_ds.cluster_sets)
         zbp_ds["roi2"] = flatten_clusters(roi2.astype(bool), dim="roi2")
 
     if add_attrs:
@@ -628,21 +656,35 @@ def set_score(
             {
                 f"{prefix}.variance": variance,
                 f"{prefix}.with_overlaps": with_overlaps,
-            }
+            },
         )
 
 
+@ds_requires(
+    variables=("roi2", "gap_boolean", "gap"),
+    sets_variables=SCORE_VARIABLES,
+)
+def to_roi2_ds(zbp_ds: xr.Dataset) -> xr.Dataset:
+    """Convert a fully analyzed Stage 2 ZBP dataset to an ROI2 dataset."""
+    ds = zbp_ds.copy(deep=True)
+    to_drop = ds.data_vars.keys() - {"roi2", "gap_boolean", "gap", "roi2_passed"}
+    ds = ds.drop_vars(to_drop)
+    tgp.two._set_score(ds, dim="roi2_cluster_number", data_var="roi2")
+    return ds
+
+
 def cluster_sets_to_cluster_pairs(
-    cluster_sets: xr.DataArray, mode: Literal["index", "dimension"] = "index"
-) -> list[set[ClusterPair]]:
-    """Convert `cluster_sets` DataArray to a list of sets with tuples of `ClusterPair`s."""
+    cluster_sets: xr.DataArray,
+    mode: Literal["index", "dimension"] = "index",
+) -> list[set[ClusterIndex]]:
+    """Convert `cluster_sets` DataArray to a list of sets with tuples of `ClusterIndex`s."""
     cluster_sets = cluster_sets.transpose("cutter_pair_index", "zbp_cluster_number")
     overlaps = []
     for i in np.sort(np.unique(cluster_sets)):
         if np.isnan(i):
             continue
         i, j = np.where(cluster_sets == i)
-        sets = {(a, b) for a, b in zip(i, j)}
+        sets = set(zip(i, j))
         overlaps.append(sets)
     if mode == "dimension":
         dim_a = cluster_sets["cutter_pair_index"]
@@ -654,7 +696,7 @@ def cluster_sets_to_cluster_pairs(
 
 
 def set_boundary_array(
-    ds,
+    ds: xr.Dataset,
     field_name: str = "B",
     plunger_gate_name: str = "V",
     pixel_size: int = 3,
@@ -685,8 +727,11 @@ def set_boundary_array(
         Whether to add a boundary array for each cluster or only topological clusters.
     """
 
-    def _add_boundary_array(cluster_array, boundary, pixel_size):
-
+    def _add_boundary_array(
+        cluster_array: np.ndarray,
+        boundary: dict[tuple[int, int], bool],
+        pixel_size: int,
+    ) -> np.ndarray:
         boundary_arr = np.zeros_like(cluster_array) * np.nan
         for (i, j), is_topo in boundary.items():
             if is_topo or all_boundaries:
@@ -701,14 +746,14 @@ def set_boundary_array(
         input_core_dims=[[plunger_gate_name, field_name], []],
         output_core_dims=[[plunger_gate_name, field_name]],
         vectorize=True,
-        kwargs=dict(pixel_size=pixel_size),
+        kwargs={"pixel_size": pixel_size},
     )
 
 
 @ds_requires(variables=("gapped_zbp",), sets_variables=("gapped_zbp_cluster",))
 def set_clusters(
     zbp_ds: xr.Dataset,
-    min_cluster_size: int = 7,
+    min_cluster_size: float | int = 7,
     xi: float = 0.05,
     max_eps: float = 2,
     min_samples: int = 3,
@@ -755,7 +800,7 @@ def set_clusters(
                 f"{prefix}.xi": xi,
                 f"{prefix}.max_eps": max_eps,
                 f"{prefix}.min_samples": min_samples,
-            }
+            },
         )
 
 
@@ -765,14 +810,15 @@ def set_clusters(
 )
 def cluster_and_score(
     zbp_ds: xr.Dataset,
-    min_cluster_size: int = 7,
+    min_cluster_size: float | int = 7,
     xi: float = 0.05,
     max_eps: float = 2,
     min_samples: int = 3,
     variance: int = 3,
-    cluster_gap_threshold: float | None = None,
+    cluster_gap_threshold: float | None = 10e-3,
     cluster_volume_threshold: float | None = None,
-    cluster_percentage_boundary_threshold: float | None = None,
+    cluster_percentage_boundary_threshold: float | None = 0.6,
+    cluster_ncutter_threshold: float | None = 0.5,
 ) -> xr.Dataset:
     """Run clustering and score on the given Stage 2 ZBP dataset.
 
@@ -795,11 +841,17 @@ def cluster_and_score(
         Position tolerance for distance between the ZBP array end and the gap
         closing.
     cluster_gap_threshold
-        Minimum median gap of the clusters.
+        Minimum median gap in meV of the clusters. ``10e-3`` is used in arXiv:2207.02472.
     cluster_volume_threshold
-        Minimum volume of the clusters.
+        Minimum volume of the clusters. ``(10e-3)**2 / E_Z / lever_arm`` is
+        used in arXiv:2207.02472.
     cluster_percentage_boundary_threshold
-        Minimum percentage of boundary of the clusters.
+        Minimum percentage of boundary of the clusters. ``(GB%)_th=0.6`` is used
+        in arXiv:2207.02472.
+    cluster_ncutter_threshold
+        Minimum fraction of clusters (that meet the above thresholds) that
+        overlap between different cutter values. ``(C_i%)_th=0.5`` is used
+        in arXiv:2207.02472.
 
     Returns
     -------
@@ -810,6 +862,7 @@ def cluster_and_score(
         cluster_gap_threshold is None
         and cluster_percentage_boundary_threshold is None
         and cluster_volume_threshold is None
+        and cluster_ncutter_threshold is None
     )
     ds = zbp_ds if no_thresholds else zbp_ds.copy()
     set_clusters(
@@ -833,7 +886,8 @@ def cluster_and_score(
             f"{prefix}.cluster_gap_threshold": cluster_gap_threshold,
             f"{prefix}.cluster_volume_threshold": cluster_volume_threshold,
             f"{prefix}.cluster_percentage_boundary_threshold": cluster_percentage_boundary_threshold,
-        }
+            f"{prefix}.cluster_ncutter_threshold": cluster_ncutter_threshold,
+        },
     )
 
     if no_thresholds:
@@ -852,14 +906,52 @@ def cluster_and_score(
     if cluster_volume_threshold is not None:
         volume_condition = ds.cluster_volume > cluster_volume_threshold
         condition &= volume_condition
-    # Set clusters that do not satisfy conditions to False and
-    # assign flattened 'gapped_zbp_cluster' to unclustered dataset
-    zbp_ds["gapped_zbp_cluster"] = remove_with_condition(
-        ds.gapped_zbp_cluster, condition
-    )
+
+    # Set clusters that do not satisfy conditions to False
+    gapped_zbp_cluster = remove_with_condition(ds.gapped_zbp_cluster, condition)
+
+    # Make a copy which can be used to figure out whether the result is inconclusive
+    soi2 = gapped_zbp_cluster.copy()
+
+    # Only after filtering out the clusters based on the above thresholds,
+    # leave only the clusters that meet the ncutter threshold.
+    if cluster_ncutter_threshold is not None:
+        msg = "cluster_ncutter_threshold must be between 0 and 1"
+        assert 0 <= cluster_ncutter_threshold <= 1, msg
+        ncutters_max = ds.dims["cutter_pair_index"]
+        ncutters = get_ncutters(gapped_zbp_cluster)
+        ncutter_condition = ncutters >= cluster_ncutter_threshold * ncutters_max
+        gapped_zbp_cluster = remove_with_condition(
+            gapped_zbp_cluster,
+            ncutter_condition,
+        )
+
+    # `zbp_ds` is still the original unchanged dataset at this point.
+
+    # Assign flattened 'gapped_zbp_cluster' to unclustered dataset
+    zbp_ds["gapped_zbp_cluster"] = gapped_zbp_cluster
     zbp_ds["cluster_condition"] = condition
+    zbp_ds["soi2"] = soi2
+
     # Redo score for clusters
     set_score(zbp_ds, with_overlaps=True)
+
+    # We can assert whether we are sure the device has failed by
+    # using the dataset that had no ncutter_threshold applied to it.
+    failed = soi2.max().item() == 0
+    passed = zbp_ds.roi2.max().item() > 0
+    if passed:
+        zbp_ds.attrs["extra.device_passed"] = "passed"
+    elif failed:
+        zbp_ds.attrs["extra.device_passed"] = "failed"
+    else:
+        zbp_ds.attrs["extra.device_passed"] = "inconclusive"
+
+    if cluster_ncutter_threshold is not None:
+        # If we set cluster_ncutter_threshold that means all ROI2 clusters
+        # are considered to be passed.
+        passed_roi2s = _roi2s(zbp_ds)
+        set_passed_roi2(zbp_ds, passed=passed_roi2s)
 
     return zbp_ds
 
@@ -905,7 +997,9 @@ def _get_boundary_indices(cluster_array: np.ndarray) -> set[tuple[int, int]]:
 
 
 def antisymmetric_conductance_part(
-    conductance: xr.DataArray, bias_name: str, field_name: str | None = "B"
+    conductance: xr.DataArray,
+    bias_name: str,
+    field_name: str | None = "B",
 ) -> xr.DataArray:
     """Return the anti-symmetric part of the conductance."""
     dims = [bias_name, field_name] if field_name else [bias_name]
@@ -918,14 +1012,19 @@ def antisymmetric_conductance_part(
     )
 
 
-ClusterPair: TypeAlias = Tuple[int, int]
+class ClusterIndex(NamedTuple):
+    """Convenience class for indexing clusters."""
+
+    cutter_pair_index: int
+    zbp_cluster_number: int
 
 
-def _all_overlapping_combinations(clusters: xr.DataArray) -> list[set[ClusterPair]]:
+def _all_overlapping_combinations(clusters: xr.DataArray) -> list[set[ClusterIndex]]:
     dim_cut = "cutter_pair_index"
     dim_clu = "zbp_cluster_number"
     pairs = itertools.product(
-        range(len(clusters[dim_cut])), range(len(clusters[dim_clu]))
+        range(len(clusters[dim_cut])),
+        range(len(clusters[dim_clu])),
     )
     pairs = np.array(list(pairs))
 
@@ -940,10 +1039,10 @@ def _all_overlapping_combinations(clusters: xr.DataArray) -> list[set[ClusterPai
     # get indices of pairs that overlap
     overlaps = [pairs[row > 0].tolist() for row in mat]
     # to list[set[tuple[int, int]]]
-    return [{tuple(x) for x in ov} for ov in overlaps if ov]
+    return [{ClusterIndex(*x) for x in ov} for ov in overlaps if ov]
 
 
-def _join_overlapping_sets(sets):
+def _join_overlapping_sets(sets: list[set[ClusterIndex]]) -> list[set[ClusterIndex]]:
     if len(sets) <= 1:
         return sets
     i, j = zip(*itertools.combinations(range(len(sets)), 2))
@@ -954,7 +1053,8 @@ def _join_overlapping_sets(sets):
     graph += scipy.sparse.identity(len(sets))
     # find which sets "transitively" intersect
     ncomponents, labels = scipy.sparse.csgraph.connected_components(
-        graph, directed=False
+        graph,
+        directed=False,
     )
     # Merge together sets that transitively intersect
     ret = [set() for _ in range(ncomponents)]
@@ -965,7 +1065,7 @@ def _join_overlapping_sets(sets):
 
 def _mapping_to_dataarray(
     mapping: dict[Any, Any],
-    dims: list[str, list[Any]],
+    dims: list[tuple[str, list[Any]]],
     fill: float = np.nan,
     dtype: str = "float",
 ) -> xr.DataArray:
@@ -980,7 +1080,8 @@ def _mapping_to_dataarray(
 
 
 def _cluster_sets_to_da(
-    clusters: xr.DataArray, cluster_sets: list[set[ClusterPair]]
+    clusters: xr.DataArray,
+    cluster_sets: list[set[ClusterIndex]],
 ) -> xr.DataArray:
     mapping = {
         pair: i for i, pairs in enumerate(cluster_sets, start=1) for pair in pairs
@@ -993,7 +1094,7 @@ def _cluster_sets_to_da(
 
 def get_overlapping_clusters(
     gapped_zbp_cluster: xr.DataArray,
-) -> list[set[ClusterPair]]:
+) -> list[set[ClusterIndex]]:
     """Find overlapping clusters.
 
     Parameters
@@ -1012,7 +1113,7 @@ def get_overlapping_clusters(
     return _cluster_sets_to_da(clusters, cluster_sets)
 
 
-def get_nclusters(cluster_sets: xr.DataArray):
+def get_nclusters(cluster_sets: xr.DataArray) -> xr.DataArray:
     """Find the number of clusters for each ROI2."""
     nclusters = xr.zeros_like(cluster_sets, dtype=int)
     for i in np.unique(cluster_sets):
@@ -1039,7 +1140,8 @@ def get_ncutters(gapped_zbp_cluster: xr.DataArray) -> xr.DataArray:
 
 
 def construct_roi2(
-    gapped_zbp_cluster: xr.DataArray, cluster_sets: xr.DataArray
+    gapped_zbp_cluster: xr.DataArray,
+    cluster_sets: xr.DataArray,
 ) -> xr.Dataset:
     """Construct the ROI2 dataset where the numbers indicate the number of cutter values.
 
@@ -1047,14 +1149,17 @@ def construct_roi2(
     """
     clusters = expand_clusters(gapped_zbp_cluster, dim="zbp_cluster_number")
     if gapped_zbp_cluster.max() == 0:  # no clusters so no roi2
-        return clusters.sum(dim=["B", "V"]).rename(zbp_cluster_number="roi2")
+        sum_dims = [
+            dim for dim in clusters.dims if dim not in ["B", "V", "zbp_cluster_number"]
+        ]
+        return clusters.sum(dim=sum_dims).rename(zbp_cluster_number="roi2")
     roi2s = []
     labels = [int(i) for i in np.unique(cluster_sets) if not np.isnan(i)]
     for i in labels:
         i_x, i_y = np.where(cluster_sets.transpose("cutter_pair_index", ...) == i)
         roi2 = sum(
             drop_dimensionless_variables(
-                clusters.isel(cutter_pair_index=a, zbp_cluster_number=b)
+                clusters.isel(cutter_pair_index=a, zbp_cluster_number=b),
             )
             for a, b in zip(i_x, i_y)
         )
@@ -1065,7 +1170,8 @@ def construct_roi2(
 
 
 def remove_with_condition(
-    gapped_zbp_cluster: xr.DataArray, condition: xr.DataArray
+    gapped_zbp_cluster: xr.DataArray,
+    condition: xr.DataArray,
 ) -> xr.DataArray:
     """Remove clusters that do not meet condition."""
     cl = expand_clusters(gapped_zbp_cluster, dim="zbp_cluster_number")
@@ -1078,3 +1184,26 @@ def remove_with_condition(
         kwargs={"dim": "zbp_cluster_number"},
     )
     return gapped_zbp_cluster
+
+
+def _roi2s(zbp_ds: xr.Dataset) -> list[int]:
+    roi2s = sorted(np.unique(zbp_ds.roi2.values))
+    return [int(r) for r in roi2s if r != 0]  # Zero is not a ROI2
+
+
+def set_passed_roi2(zbp_ds: xr.Dataset, passed: list[int]) -> None:
+    """Set passed for each ROI2.
+
+    Examples
+    --------
+    >>> zbp_ds.roi2.plot()
+    >>> tgp.two.set_passed_roi2(zbp_ds, [1, 2])  # if 1 and 2 passed
+    """
+    roi2s = _roi2s(zbp_ds)
+    bools = [roi2 in passed for roi2 in roi2s]
+    da = xr.DataArray(
+        bools,
+        dims="roi2_cluster_number",
+        coords={"roi2_cluster_number": roi2s},
+    )
+    zbp_ds["roi2_passed"] = da

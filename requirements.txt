@@ -6,8 +6,10 @@ matplotlib
 numpy
 pandas
 pyyaml
-scipy
+rich
+ruamel.yaml
 scikit-learn
+scipy
 toolz
 tqdm
 typing_extensions

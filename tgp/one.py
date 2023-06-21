@@ -10,6 +10,7 @@ from IPython.display import display
 import joblib
 import numpy as np
 import scipy.ndimage
+import scipy.stats
 import xarray as xr
 
 from tgp.common import (
@@ -22,7 +23,7 @@ from tgp.common import (
     set_clusters_of,
 )
 
-memory = joblib.Memory("cachedir")
+memory = joblib.Memory("cachedir", verbose=0)
 
 
 def print_lim(da: xr.DataArray, lim: float) -> None:
@@ -54,7 +55,7 @@ def _threshold_2w(
     verbose: bool = False,
 ) -> xr.DataArray:
     if B_max is not None and V_max is not None:
-        sel = da.where((da.B < B_max) & (da.V < V_max))
+        sel = da.where((B_max > da.B) & (V_max > da.V))
         th_2w = _noise_level_threshold(sel)
     if th_2w is None:
         th_2w = auto_extract_threshold_2w(da, n_tiles, percentile)
@@ -112,7 +113,7 @@ def set_2w_th(
             f"{prefix}.n_tiles": n_tiles,
             f"{prefix}.percentile": percentile,
             f"{prefix}.th_2w": th_2w,
-        }
+        },
     )
     # By providing th_2w as a tuple, it allows to manually set
     # thresholds for left and right data set.
@@ -133,7 +134,9 @@ def set_2w_th(
     sets_variables=("L_gapped", "R_gapped", "gapped"),
 )
 def set_gapped(
-    ds: xr.Dataset, th_2w_p: float, method: Literal["structure", "fair"] = "structure"
+    ds: xr.Dataset,
+    th_2w_p: float,
+    method: Literal["structure", "fair"] = "structure",
 ) -> None:
     """Set the "gapped" array in the dataset.
 
@@ -276,12 +279,14 @@ def set_clusters(
             f"{prefix}.xi": xi,
             f"{prefix}.min_cluster_size": min_cluster_size,
             f"{prefix}.max_eps": max_eps,
-        }
+        },
     )
 
 
 @ds_requires(
-    variables=("clusters",), dims=("B", "V"), sets_variables=CLUSTER_INFO_VARIABLES
+    variables=("clusters",),
+    dims=("B", "V"),
+    sets_variables=CLUSTER_INFO_VARIABLES,
 )
 def set_cluster_info(ds: xr.Dataset) -> None:
     """Set the ``cluster_info`` array in the dataset.
@@ -382,7 +387,7 @@ def analyze(
     th = thresholds
     th_old = get_thresholds(ds.attrs)
 
-    def needs_update(key):
+    def needs_update(key: str) -> bool:
         return True if key not in th else th_old.get(key) != th[key]
 
     if force or needs_update("set_2w_th"):
@@ -406,7 +411,7 @@ def analyze(
     return ds
 
 
-def set_defaults(ds: xr.Dataset, defaults: dict[str, float]):
+def set_defaults(ds: xr.Dataset, defaults: dict[str, float]) -> None:
     """Set default values for thresholds in the ``ds.attrs`` dictionary."""
     defaults = {
         k: v for k, v in defaults.items() if v is not None and not math.isnan(v)
@@ -458,8 +463,10 @@ def _slice_to_tiles(ar: np.ndarray, n_tiles: int) -> list[_Tile]:
 
 
 def auto_extract_threshold_2w(
-    da: xr.DataArray, n_tiles: int = 100, percentile: int = 10
-):
+    da: xr.DataArray,
+    n_tiles: int = 100,
+    percentile: int = 10,
+) -> xr.DataArray:
     """Split up (B vs V) images in n tiles and calculate its threshold.
 
     Then order and take the value at the $m$th percentile.
@@ -473,7 +480,9 @@ def auto_extract_threshold_2w(
 
 @ds_requires(variables=("clusters",), dims=("B", "V"))
 def get_zoomin_ranges(
-    ds: xr.Dataset, n_clusters: int, zoomin_V_height: float
+    ds: xr.Dataset,
+    n_clusters: int,
+    zoomin_V_height: float,
 ) -> list[dict[str, tuple[float, float]]]:
     """Get the zoomin ranges for each cluster.
 
