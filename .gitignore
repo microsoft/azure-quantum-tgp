@@ -1,3 +1,5 @@
+notebooks/figures/
+
 # Byte-compiled / optimized / DLL files
 tests/notebook_tests/test_notebooks.py
 

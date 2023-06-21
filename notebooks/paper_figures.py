@@ -6,7 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 import warnings
 
+from PIL import Image
 import matplotlib as mpl
+import matplotlib.colors
 from matplotlib.colors import LinearSegmentedColormap, LogNorm
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
@@ -951,5 +953,680 @@ def plot_xi(ds_a, ds_b, xlims=(0.5, 3.6), ylims=(-1, 2), fname: str | None = Non
     )
     axs[1].set_ylabel("")
     tgp.plot.paper.add_subfig_label(axs[1], "(b)", width=0.075, height=0.10)
+    maybe_save_fig(fname)
+    plt.show()
+
+
+def _select_closest_bias(
+    data: xr.Dataset | xr.DataArray,
+    bias: float,
+    bias_tolerance: float,
+    uncorrected_bias_label: str = "left_bias",
+    corrected_bias_label: str = "left_bias_sample",
+):
+    """Select the closest bias within the specified tolerance.
+
+    Parameters
+    ----------
+    data
+        Input data containing the bias values.
+    bias
+        Target bias value.
+    bias_tolerance
+        Tolerance for the closest bias value.
+    uncorrected_bias_label
+        Label for the uncorrected bias dimension in the input data.
+    corrected_bias_label
+        Label for the corrected bias dimension in the input data.
+
+    Returns
+    -------
+    xr.DataArray:
+        DataArray with the closest bias values.
+    """
+    not_all_nan_slices = ~(
+        np.isnan(data[corrected_bias_label]).all(dim=uncorrected_bias_label)
+    )
+    corrected_bias = data[corrected_bias_label].where(not_all_nan_slices, 0)
+    closest_bias_index = np.abs(corrected_bias - bias).argmin(
+        dim=uncorrected_bias_label
+    )
+    bias_corresponding_to_index = corrected_bias[
+        {uncorrected_bias_label: closest_bias_index}
+    ]
+    return data[{uncorrected_bias_label: closest_bias_index}].where(
+        (np.abs(bias_corresponding_to_index - bias) < bias_tolerance)
+        & (not_all_nan_slices)
+    )
+
+
+def _compute_Y(
+    nonlocal_data: xr.DataArray,
+    parent_gap: float,
+    uncorrected_bias_label: str = "left_bias",
+    corrected_bias_label: str = "left_bias_sample",
+):
+    """Compute the average value of nonlocal_data over the range defined by parent_gap.
+
+    Parameters
+    ----------
+    nonlocal_data
+        Input data containing nonlocal conductance values.
+    parent_gap
+        Range for averaging the nonlocal_data.
+    corrected_bias_label
+        Label for the corrected bias dimension in the input data.
+    uncorrected_bias_label
+        Label for the uncorrected bias dimension in the input data.
+
+    Returns
+    -------
+    xr.DataArray
+        DataArray with the computed average values.
+    """
+
+    mask_below_gap = (nonlocal_data[corrected_bias_label] > -parent_gap) & (
+        nonlocal_data[corrected_bias_label] < parent_gap
+    )
+    return (
+        xr.apply_ufunc(
+            np.trapz,
+            nonlocal_data.where(mask_below_gap, 0),
+            nonlocal_data.where(mask_below_gap, 0)[corrected_bias_label],
+            input_core_dims=[[uncorrected_bias_label], [uncorrected_bias_label]],
+        )
+        / parent_gap
+    )
+
+
+def _correct_hymp_dataset(
+    ds,
+    r_left: float = 1850.0,
+    r_right: float = 1850.0,
+    r_gnd: float = 1850.0,
+    left_dc_current_name: str = "i_l",
+    right_dc_current_name: str = "i_r",
+) -> xr.Dataset:
+    from tgp.bias_correction import correct_three_terminal
+
+    return correct_three_terminal(
+        ds,
+        r_left=r_left,
+        r_right=r_right,
+        r_gnd=r_gnd,
+        left_dc_current_name=left_dc_current_name,
+        right_dc_current_name=right_dc_current_name,
+    )
+
+
+def load_hmp_datasets(path: Path, parent_gap: float = 0.2) -> list[xr.Dataset]:
+    """Load datasets from a directory and process them.
+
+    Parameters
+    ----------
+    path
+        Path to the directory containing the datasets.
+    parent_gap
+        Range for averaging the nonlocal_data.
+
+    Returns
+    -------
+    list[xr.Dataset]
+        Tuple containing the combined dataset and a list of individual datasets.
+    """
+    path = Path(path)
+    paths = path.glob("*.nc")
+    datasets = []
+    for p in sorted(paths):
+        ds = xr.load_dataset(p)
+        L = ds.L
+        ds = _correct_hymp_dataset(ds[["g_rr", "g_rl", "g_lr", "g_ll", "i_l", "i_r"]])
+        for k in ["left_bias", "right_bias", "left_bias_sample", "right_bias_sample"]:
+            ds[k] = ds[k] * 1000
+            ds[k].attrs["units"] = "mV"
+        ds = ds.assign_coords(L=L)
+        ds["L"].attrs["units"] = "nm"
+        ds["iG"] = _compute_Y(ds.g_rl, parent_gap)
+        ds["Gzb"] = _select_closest_bias(ds.g_rl, 0, 1e-2)
+        ds = ds.squeeze("right_bias")
+        datasets.append(ds)
+
+    return datasets
+
+
+def _localized_model(x: np.ndarray, A: float, localization_length: float) -> np.ndarray:
+    """Localized conductance model.
+
+    Parameters
+    ----------
+    x:
+        x-data for the model.
+    A
+        Amplitude parameter.
+    localization_length
+        Localization length parameter.
+
+    Returns
+    -------
+    np.ndarray
+        Resulting conductance values.
+    """
+    return A * np.exp(-x / (localization_length / 2))
+
+
+def _fit_conductance_scaling_model(
+    x: np.ndarray,
+    y: np.ndarray,
+    noise_floor: float,
+) -> tuple[float, float, float, float, float]:
+    """Fit the conductance scaling model to the data.
+
+    Parameters
+    ----------
+    x
+        x-data to be fitted.
+    y
+        y-data to be fitted.
+    noise_floor
+        Noise floor for weighing the fit.
+
+    Returns
+    -------
+    Tuple[float, float, float, float, float]:
+        Tuple containing the fitted parameters (A, localization_length),
+        R-squared, and uncertainties (A_err, l_err).
+    """
+    from scipy.stats import linregress, t
+    from sklearn.metrics import r2_score
+
+    inds = y > noise_floor
+    x, y = x[inds], y[inds]
+
+    res = linregress(x, np.log(y), alternative="less")
+    localization_length = -2 / res.slope
+
+    A = np.exp(res.intercept)
+    y_pred = _localized_model(x, A, localization_length)
+
+    r2 = r2_score(y, y_pred) if np.sum(np.isnan(y_pred)) == 0 else 0
+
+    ts = abs(t.ppf(0.05 / 2, 4))
+    l_err = ts * res.stderr
+    A_err = ts * res.intercept_stderr * A / np.abs(res.intercept)
+
+    return A, localization_length, r2, A_err, l_err
+
+
+def _localization_length_estimate(
+    gnl: xr.DataArray,
+    noise_floor: float,
+    *,
+    length_dim: str = "L",
+    ax: mpl.axes.Axes | None = None,
+    draw_line: bool = False,
+    label: str | None = None,
+    xlabel: str = r"$V_\mathrm{p}$",
+) -> xr.Dataset:
+    """Estimate the localization length from conductance data.
+
+    Parameters
+    ----------
+    gnl
+        Input data containing nonlocal conductance values.
+    length_dim
+        Length dimension label.
+    ax
+        Axes to plot on, if none is provided, no plot is drawn.
+    draw_line
+        Whether to draw a line on the plot.
+    label
+        Plot label.
+    xlabel
+        x-axis label.
+    noise_floor
+        Noise floor for weighing the fit.
+
+    Returns
+    -------
+    xr.Dataset
+    """
+    A, localization_length, r2, A_err, l_err = xr.apply_ufunc(
+        _fit_conductance_scaling_model,
+        gnl.L,
+        gnl,
+        kwargs=dict(noise_floor=noise_floor),
+        input_core_dims=[[length_dim], [length_dim]],
+        output_core_dims=[(), (), (), (), ()],
+        vectorize=True,
+        output_dtypes=[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    )
+    ds = xr.Dataset(
+        {
+            "A": A.astype(float),
+            "localization_length": localization_length.astype(float),
+            "r2": r2.astype(float),
+            "A_err": A_err.astype(float),
+            "l_err": l_err.astype(float),
+        }
+    )
+    if ax is not None:
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(r"$\mathrm{localization_length}$")
+
+        x, y = xr.broadcast(gnl.active_gates, ds.localization_length)
+
+        if draw_line:
+            ax.plot(x, 1e-3 * y)
+
+        s = np.array(np.maximum(ds.r2, 0), dtype=float)
+        im = ax.scatter(
+            x,
+            1e-3 * y,
+            label=label,
+            c=ds.r2,
+            vmin=0,
+            vmax=1,
+            s=s * matplotlib.rcParams["lines.markersize"] ** 2,
+        )
+        plt.colorbar(im, label="$R^2$", ax=ax, pad=-0.04, aspect=40)
+
+    return ds
+
+
+def _noisy_threshold(
+    data: xr.DataArray, threshold: float, dim: str = "active_gates"
+) -> xr.DataArray:
+    """Find the first index along a dimension where data exceeds a threshold.
+
+    Parameters
+    ----------
+    data
+        Input data.
+    threshold
+        Threshold value.
+    dim
+        Dimension to search along.
+
+    Returns
+    -------
+    xr.DataArray
+        Array with the first index where data exceeds the threshold.
+    """
+    return (data > threshold).idxmax(dim)
+
+
+def _integrated_length_scaling(
+    datasets: xr.Dataset, integration_window: float, variable: str = "g_rl"
+) -> xr.DataArray:
+    """Compute the integrated length scaling for a list of datasets.
+
+    Parameters
+    ----------
+    datasets
+        Input datasets.
+    integration_window
+        Range for averaging the nonlocal_data.
+    variable
+        Variable to compute the integrated length scaling on.
+
+    Returns
+    -------
+    xr.DataArray
+        Integrated length scaling values.
+    """
+    arrs = [_compute_Y(ds[variable], integration_window) for ds in datasets]
+    return xr.concat(arrs, "L")
+
+
+def _plot_localization_length(
+    datasets: xr.Dataset,
+    wire_pinchoff: xr.DataArray,
+    ax: mpl.axes.Axes,
+    *,
+    noise_floor: float,
+    variable: str = "g_rl",
+    local_normalization: bool = True,
+    variable_l: str = "g_ll",
+    variable_r: str = "g_rr",
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Plot the localization length for a list of datasets.
+
+    Parameters
+    ----------
+    datasets
+        Input datasets.
+    wire_pinchoff
+        Wire pinchoff value.
+    ax
+        Axes to plot on.
+    noise_floor
+        Noise floor for weighing the fit.
+    variable
+        Variable to compute the localization length on.
+    local_normalization
+        Whether to perform local normalization.
+    variable_l
+        Left variable for local normalization.
+    variable_r
+        Right variable for local normalization.
+
+    Returns
+    -------
+    Tuple[xr.Dataset, xr.Dataset]
+    """
+    ds = _integrated_length_scaling(datasets, 0.01, variable=variable)
+    if local_normalization:
+        ds_l = _integrated_length_scaling(datasets, 0.01, variable=variable_l)
+        ds_r = _integrated_length_scaling(datasets, 0.01, variable=variable_r)
+        ds = ds / np.sqrt(ds_l * ds_r)
+
+    ds = ds.sel(active_gates=ds.active_gates[ds.active_gates > wire_pinchoff.values])
+
+    ds_localization_length = _localization_length_estimate(
+        -ds, ax=ax, noise_floor=noise_floor
+    )
+    return ds, ds_localization_length
+
+
+def _plot_length_scaling(
+    datasets: xr.Dataset,
+    axs: mpl.axes.Axes,
+    cax: mpl.axes.Axes,
+    ylabel: str = r"$V_\mathrm{p}$ [V]",
+    vmin: float = 0,
+    vmax: float = 2,
+    varname: str = "g_rl",
+) -> None:
+    """Plot the length scaling for a list of datasets.
+
+    Parameters
+    ----------
+    datasets
+        Input datasets.
+    axs
+        Axes to plot on.
+    cax
+        Axes for the colorbar.
+    ylabel
+        y-axis label.
+    vmin
+        Minimum value for the colormap.
+    vmax
+        Maximum value for the colormap.
+    varname
+        Variable to plot.
+    """
+
+    for ax in axs:
+        ax.set_xlabel(r"Bias [$\mu$V]")
+        ax.set_xticks(ticks=[-0.2, 0, 0.2])
+        ax.set_xticklabels(["$-200$", "$0$", "$200$"])
+
+    axs[0].set_ylabel(ylabel)
+    cmap = plt.get_cmap("OrRd")
+
+    norm = matplotlib.colors.Normalize(vmin, vmax)
+
+    for ds, ax in zip(datasets, axs):
+        x, y, z = xr.broadcast(ds.left_bias_sample, ds.active_gates, -ds[varname])
+
+        excluded_region = x.isnull().any("left_bias")
+
+        x = x.where(~excluded_region, drop=True)
+        y = y.where(~excluded_region, drop=True)
+        z = z.where(~excluded_region, drop=True)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            im = ax.pcolormesh(
+                x, y, z, norm=norm, cmap=cmap, linewidth=0, rasterized=True
+            )
+        prefix = r"$L =" if np.isclose(ds.L, 1000) else "$"
+        ax.set_title(prefix + r"%g\,\mu$m" % (float(ds.L.values / 1000)))
+
+    plt.colorbar(
+        im,
+        cax=cax,
+        label=r"$-G_{\mathrm{RL}}$ [$e^2/h$]",
+        extend="both",
+        extendfrac=0.03,
+    )
+
+
+def plot_hybrid_mobility_protocol(
+    datasets: xr.Dataset,
+    *,
+    wire_pinchoff_threshold: float = 0.05,
+    mesa_pinchoff_threshold: float = 4,
+    local_normalization: bool = True,
+    fig_scale: float = 2.5,
+    fig_relative_height: float = 1 / 6,
+    pb_relative_width: float = 0.7,
+    pb_cb_width: float = 0.05,
+    spacer: float = 0.001,
+    lower_gate_voltage_padding: float = 0.05,
+    yscale: str = "log",
+    ylims: tuple[float | None, float | None] = (None, None),
+    dpi: int | None = 300,
+    noise_floor: float = 3e-3,
+    variable: str = "g_rl",
+    fname: str | None = None,
+) -> tuple[mpl.figure.Figure, xr.Dataset, xr.Dataset]:
+    """Create a plot for the paper.
+
+    Parameters
+    ----------
+    datasets
+        Input datasets.
+    wire_pinchoff_threshold
+        Wire pinchoff threshold.
+    mesa_pinchoff_threshold
+        Mesa pinchoff threshold.
+    local_normalization
+        Whether to perform local normalization.
+    fig_scale
+        Figure scale.
+    fig_relative_height
+        Figure relative height.
+    pb_relative_width
+        Plot box relative width.
+    pb_cb_width
+        Plot box colorbar width.
+    spacer
+        Spacer width.
+    lower_gate_voltage_padding
+        Lower gate voltage padding.
+    yscale
+        y-axis scale.
+    ylims
+        y-axis limits.
+    dpi
+        DPI for the figure.
+    noise_floor
+        Noise floor for weighing the fit.
+    variable
+        Variable to compute the localization length on.
+
+    Returns
+    -------
+    Tuple[mpl.figure.Figure, xr.Dataset, xr.Dataset]
+    """
+    fig = plt.figure(
+        constrained_layout=True,
+        figsize=(fig_scale * 6.5, fig_scale * 13 * fig_relative_height),
+        dpi=dpi,
+    )
+
+    pb_total_width = pb_relative_width + pb_cb_width
+    pbcol_width = pb_total_width / (1 - pb_total_width) / len(datasets)
+    widths = len(datasets) * [pbcol_width] + [pb_cb_width] + [spacer] + [1]
+    spec = fig.add_gridspec(ncols=len(widths), nrows=2, width_ratios=widths)
+
+    axs_pb = [fig.add_subplot(spec[0:2, 0])]
+    axs_pb += [
+        fig.add_subplot(spec[0:2, i], sharey=axs_pb[0]) for i in range(1, len(datasets))
+    ]
+    for ax in axs_pb[1:]:
+        plt.setp(ax.get_yticklabels(), visible=False)
+
+    ax_cb = fig.add_subplot(spec[0:2, len(axs_pb)])
+    ax_ll = fig.add_subplot(spec[1, -1])
+    ax_2 = fig.add_subplot(spec[0, -1])
+
+    # pinchoffs
+    wire_pinchoff = _noisy_threshold(-datasets[0].Gzb, wire_pinchoff_threshold)
+    mesa_pinchoff = _noisy_threshold(-datasets[-1].Gzb, mesa_pinchoff_threshold)
+
+    gate_lims = (wire_pinchoff - lower_gate_voltage_padding, mesa_pinchoff)
+
+    # Length scaling
+    _plot_length_scaling(datasets, axs_pb, cax=ax_cb)
+    for ax in axs_pb:
+        ax.set_ylim(*gate_lims)
+        ax.axhline(wire_pinchoff, c="k", linestyle=":", lw=2)
+
+    # Localization length
+    ds, ds_localization_length = _plot_localization_length(
+        datasets,
+        wire_pinchoff,
+        ax_ll,
+        local_normalization=local_normalization,
+        noise_floor=noise_floor,
+        variable=variable,
+    )
+    ax_ll.set_xlim(gate_lims[0] - 0.07, gate_lims[1])
+
+    ax_ll.set_yscale(yscale)
+    ax_ll.set_ylim(*ylims)
+    ax_ll.axvline(wire_pinchoff, c="k", linestyle=":", lw=2)
+    ax_ll.set_ylabel(r"$\ell_{\mathrm{loc}}$ [$\mu$m]")
+
+    ax_2.set_xlabel(r"$L$ [$\mu$m]")
+    ax_2.set_ylabel(r"$-G_\mathrm{RL}/\sqrt{G_\mathrm{RR}G_\mathrm{LL}}$")
+
+    ax_2.set_ylim(5e-3, 1)
+    ax_2.set_xlim(-1, 8.5)
+    ax_2.set_yscale("log")
+
+    Vp_arr = [-1.0]
+    for Vp in Vp_arr:
+        y = -ds.sel(active_gates=Vp, method="nearest")
+        x = (y.L / 1e3).data
+        ds_loc1 = _localization_length_estimate(y, noise_floor=noise_floor)
+        _mfp1 = float(ds_loc1.localization_length.values.flatten()[0] / 1e3)
+
+        sp = ax_2.plot(x, y, "o", label=r"$V_\mathrm{{p}} = %g\,$V" % Vp)
+        ax_2.plot(
+            x,
+            ds_loc1.A.values.flatten()[0] * np.exp(-(np.array(x)) / (_mfp1 / 2)),
+            label=None,
+            color=sp[0].get_color(),
+        )
+
+    ax_2.legend(loc="upper right")
+
+    tgp.plot.paper.add_subfig_label(
+        axs_pb[0], "(a)", width=0.20 / 0.7, height=0.05 / 0.7
+    )
+    tgp.plot.paper.add_subfig_label(
+        ax_2, "(b)", width=0.09 / 0.7, height=0.43 / 0.7 * 0.9, text_yshift=-0.06
+    )
+    tgp.plot.paper.add_subfig_label(
+        ax_ll, "(c)", width=0.09 / 0.7, height=0.28 / 0.7 * 0.9, text_yshift=-0.01
+    )
+
+    plt.minorticks_on()
+    maybe_save_fig(fname)
+    return fig, ds, ds_localization_length
+
+
+def plot_hall_bar_trans_long_resistance(
+    ds_hb: xr.Dataset, device_image_fname: Path, fname: str | None = None
+) -> None:
+    fig, ax = plt.subplots(
+        figsize=(13, 3.6), ncols=3, nrows=1, gridspec_kw={"width_ratios": [1.2, 2, 2]}
+    )
+
+    # Plot image
+    img = np.asarray(Image.open(device_image_fname))
+    ax[0].imshow(img)
+    ax[0].axis("off")
+    tgp.plot.paper.add_subfig_label(ax[0], "(a)", width=0.11 * 2 / 1.2, height=0.13)
+
+    # Plot R_xy
+    Vg = np.arange(-0.55, 0.01, 0.11)
+    for v in Vg:
+        ds_hb.R_xy.real.sel(V_gate=v, method="nearest").plot(
+            ax=ax[1], marker="o", ms=4, label=rf"$V_\mathrm{{g}} = {v:.2f}\,$V"
+        )
+    ax[1].set_xlabel("$B$ [T]")
+    ax[1].set_ylabel(r"$R_{xy}$ [$\Omega$]")
+    ax[1].legend(bbox_to_anchor=(0.12, 1), loc="upper left", fontsize=10)
+    ax[1].set_title("")
+    ax[1].set_xlim(-0.1, None)
+    ax[1].set_xticks(np.arange(0, 1.01, 0.2))
+    tgp.plot.paper.add_subfig_label(ax[1], "(b)", width=0.10, height=0.13)
+
+    # Plot R_xx
+    width = 40e-6
+    length = 200e-6
+    B_sel = 0.2
+    (ds_hb.R_xx.real * width / length).sel(B=B_sel, method="nearest").plot(
+        ax=ax[2], marker="o", ms=4, label=rf"$B={B_sel:g}\,$T"
+    )
+    ax[2].set_xlabel(r"$V_\mathrm{g}$ [V]")
+    ax[2].set_ylabel(r"$R_{xx}$ [$\Omega/$sq]")
+    ax[2].legend()
+    ax[2].set_title("")
+    ax[2].set_xlim(-0.67, None)
+    ax[2].set_xticks(np.arange(-0.6, 0.01, 0.2))
+    tgp.plot.paper.add_subfig_label(ax[2], "(c)", width=0.10, height=0.13)
+
+    # Save and show plot
+    plt.tight_layout()
+    maybe_save_fig(fname)
+    plt.show()
+
+
+def plot_device_characterization(
+    ds: xr.Dataset,
+    V_sidecutter_left_gate: float = -1.95,
+    gap: float = 129e-6,
+    fname: str | None = None,
+) -> None:
+    ds = ds.sel(
+        V_sidecutter_left_gate=V_sidecutter_left_gate,
+        method="nearest",
+    )
+
+    fig, ax = plt.subplots(ncols=2, figsize=(12, 3.3))
+    ax[0].plot(ds.left_bias_sample, ds.g_ll)
+    ax[0].set_ylabel(r"$G_\mathrm{LL}$ [$e^2/h$]")
+    ax[0].set_ylim(0, None)
+    ax[1].plot(ds.left_bias_sample, ds.g_rl)
+    ax[1].set_ylabel(r"$G_\mathrm{RL}$ [$e^2/h$]")
+    ax[1].set_ylim(-0.079, 0.079)
+
+    for i, a in enumerate(ax):
+        a.set_title("")
+        ticks = np.arange(-0.0004, 0.00041, 0.0002)
+        a.set_xticks(ticks=ticks)
+        a.set_xticklabels(labels=["$%g$" % (1e6 * t) for t in ticks])
+        a.set_xlabel(r"Left bias [$\mu$V]")
+        tgp.plot.paper.add_subfig_label(
+            a, "(" + "ab"[i] + ")", width=0.083, height=0.15
+        )
+        for gp in [-gap, gap]:
+            a.axvline(gp, ls="--", lw=1.0, c="#a0a0a0", zorder=1)
+        a.text(
+            0.5,
+            0.85,
+            r"$2\Delta_\mathrm{ind}$",
+            fontsize=14,
+            ha="center",
+            va="center",
+            transform=a.transAxes,
+        )
+    plt.tight_layout()
     maybe_save_fig(fname)
     plt.show()

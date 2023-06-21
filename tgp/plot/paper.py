@@ -21,7 +21,9 @@ SAVE_KWARGS = dict(
 )
 
 
-def add_subfig_label(ax, label: str, width: float, height: float) -> None:
+def add_subfig_label(
+    ax, label: str, width: float, height: float, text_yshift: float = 0.0
+) -> None:
     """Add a label to a subfigure."""
     x0, x1 = ax.get_xlim()
     w = width * (x1 - x0)
@@ -30,7 +32,7 @@ def add_subfig_label(ax, label: str, width: float, height: float) -> None:
     ax.add_patch(mpl.patches.Rectangle((x0, y1), w, -h, color="k", zorder=1000))
     ax.text(
         x0 + w / 2,
-        y1 - h / 2,
+        y1 - h / 2 + text_yshift * (y1 - y0),
         label,
         c="w",
         ha="center",
