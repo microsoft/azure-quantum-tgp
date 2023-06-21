@@ -18,9 +18,10 @@ jobs:
     - name: Ignore big data files
       run: |
         git config --global lfs.fetchexclude 'data/simulated/yield'
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         lfs: true
+        fetch-depth: 0
     - name: Checkout LFS objects
       run: git lfs checkout
     - name: Set up Python ${{ matrix.python-version }}
