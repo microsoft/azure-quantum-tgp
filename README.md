@@ -3,7 +3,7 @@
 
 This code performs the analysis as reported in _"InAs-Al Hybrid Devices Passing the Topological Gap Protocol"_ by Microsoft Azure Quantum.
 
-The paper is available as a pre-print on [arXiv:2207.02472](https://arxiv.org/abs/2207.02472).
+The paper is available on [10.1103/PhysRevB.107.245423](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.107.245423) and [arXiv:2207.02472](https://arxiv.org/abs/2207.02472).
 
 See the Jupyter notebooks
 * [notebooks/stage-one-analysis.ipynb](notebooks/stage-one-analysis.ipynb) as a step-by-step example of the ***Stage 1*** analysis,
