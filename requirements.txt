@@ -2,7 +2,7 @@ h5netcdf
 ipython
 ipywidgets
 jinja2
-matplotlib
+matplotlib==3.7.1
 numpy
 pandas
 pyyaml
