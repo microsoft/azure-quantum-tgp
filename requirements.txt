@@ -8,7 +8,7 @@ pandas
 pyyaml
 rich
 ruamel.yaml
-scikit-learn
+scikit-learn==1.2.2
 scipy
 toolz
 tqdm
