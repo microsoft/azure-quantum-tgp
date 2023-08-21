@@ -2,13 +2,13 @@ h5netcdf
 ipython
 ipywidgets
 jinja2
-matplotlib
+matplotlib==3.7.1
 numpy
 pandas
 pyyaml
 rich
 ruamel.yaml
-scikit-learn
+scikit-learn==1.2.2
 scipy
 toolz
 tqdm

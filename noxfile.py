@@ -10,6 +10,7 @@ _NOTEBOOKS = [
     "notebooks/stage-one-analysis.ipynb",
     "notebooks/stage-two-analysis.ipynb",
     "notebooks/fridge-calibration.ipynb",
+    "notebooks/PRL130_207001.ipynb",
 ]
 
 
