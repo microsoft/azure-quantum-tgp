@@ -3,7 +3,7 @@ ipython
 ipywidgets
 jinja2
 matplotlib==3.7.1
-numpy
+numpy<2.0
 pandas
 pyyaml
 rich
