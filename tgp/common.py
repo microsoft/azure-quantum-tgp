@@ -336,7 +336,7 @@ def cluster_info(
     if not cluster.any():
         info = ClusterInfo()
         return info.as_xarray() if as_xarray else info
-    cluster = cluster.transpose(field_name, plunger_gate_name)
+    cluster = cluster.squeeze().transpose(field_name, plunger_gate_name)
     p = cluster.mean(field_name)
     p = p[p > 0].coords[plunger_gate_name]
     p_left, p_right = p.min(), p.max()
