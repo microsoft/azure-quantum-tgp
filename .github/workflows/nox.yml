@@ -53,5 +53,5 @@ jobs:
         branch: executed_notebooks
     - uses: actions/upload-artifact@v4
       with:
-        name: notebooks
+        name: notebooks-${{ matrix.platform }}-${{ matrix.python-version }}
         path: notebooks/*.ipynb
