@@ -37,20 +37,6 @@ jobs:
       run: pip install nox[uv]
     - name: Test with nox
       run: nox -e "pytest-${{ env.PY_VERSION }}"
-    - name: Commit notebooks
-      if: matrix.platform == 'ubuntu-latest' && matrix.python-version == '3.10'
-      run: |
-        git branch --delete --force "executed_notebooks" || true
-        git checkout -b executed_notebooks
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git commit -m "Add executed notebook" -a
-    - name: Push notebooks
-      if: matrix.platform == 'ubuntu-latest' && matrix.python-version == '3.10'
-      uses: ad-m/github-push-action@master
-      with:
-        force: true
-        branch: executed_notebooks
     - uses: actions/upload-artifact@v4
       with:
         name: notebooks-${{ matrix.platform }}-${{ matrix.python-version }}
