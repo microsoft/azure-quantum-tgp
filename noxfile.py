@@ -14,7 +14,7 @@ _NOTEBOOKS = [
 ]
 
 
-@nox.session(python=["3.8", "3.9", "3.10"])
+@nox.session(python=["3.8", "3.9", "3.10", "3.11"], venv_backend="uv")
 def pytest(session):
     session.install(".[test]")
     session.run("coverage", "erase")
