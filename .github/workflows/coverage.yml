@@ -18,7 +18,7 @@ jobs:
       with:
         python-version: 3.8
     - name: Install dependencies
-      run: pip install nox codecov
+      run: pip install nox[uv] codecov
     - name: Test with nox
       run: nox -e coverage
     - name: Upload test coverage

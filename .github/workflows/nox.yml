@@ -12,13 +12,13 @@ jobs:
       fail-fast: false
       matrix:
         platform: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
 
     steps:
     - name: Ignore big data files
       run: |
         git config --global lfs.fetchexclude 'data/simulated/yield'
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         lfs: true
         fetch-depth: 0
@@ -34,24 +34,10 @@ jobs:
       env:
         version: ${{ matrix.python-version }}
     - name: Install dependencies
-      run: pip install nox
+      run: pip install nox[uv]
     - name: Test with nox
       run: nox -e "pytest-${{ env.PY_VERSION }}"
-    - name: Commit notebooks
-      if: matrix.platform == 'ubuntu-latest' && matrix.python-version == '3.10'
-      run: |
-        git branch --delete --force "executed_notebooks" || true
-        git checkout -b executed_notebooks
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git commit -m "Add executed notebook" -a
-    - name: Push notebooks
-      if: matrix.platform == 'ubuntu-latest' && matrix.python-version == '3.10'
-      uses: ad-m/github-push-action@master
+    - uses: actions/upload-artifact@v4
       with:
-        force: true
-        branch: executed_notebooks
-    - uses: actions/upload-artifact@v3
-      with:
-        name: notebooks
+        name: notebooks-${{ matrix.platform }}-${{ matrix.python-version }}
         path: notebooks/*.ipynb

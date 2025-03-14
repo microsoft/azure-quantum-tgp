@@ -12,8 +12,6 @@ See the Jupyter notebooks
 * [notebooks/fridge-calibration.ipynb](notebooks/fridge-calibration.ipynb) which shows the fridge calibration data used for high-frequency corrections,
 * and [notebooks/paper-figures.ipynb](notebooks/paper-figures.ipynb) which performs _all_ the analysis and generates the plots that appear in the paper.
 
-View the executed notebooks with nbviewer: [`paper-figures.ipynb`](https://nbviewer.org/github/microsoft/azure-quantum-tgp/blob/executed_notebooks/notebooks/paper-figures.ipynb), [`stage-two-analysis.ipynb`](https://nbviewer.org/github/microsoft/azure-quantum-tgp/blob/executed_notebooks/notebooks/stage-two-analysis.ipynb), [`stage-one-analysis.ipynb`](https://nbviewer.org/github/microsoft/azure-quantum-tgp/blob/executed_notebooks/notebooks/stage-one-analysis.ipynb), [`yield-analysis.ipynb`](https://nbviewer.org/github/microsoft/azure-quantum-tgp/blob/executed_notebooks/notebooks/yield-analysis.ipynb), [`fridge-calibration.ipynb`](https://nbviewer.org/github/microsoft/azure-quantum-tgp/blob/executed_notebooks/notebooks/fridge-calibration.ipynb).
-
 ## Data
 
 We store the raw data in this repository using Git LFS in the [`data/`](data) folder.
